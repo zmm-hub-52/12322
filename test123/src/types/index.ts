@@ -20,3 +20,16 @@ export interface ApiResponse<T = unknown> {
   message: string
   data: T
 }
+
+/** 登录请求参数（账号密码） */
+export interface LoginPayload {
+  username: string
+  password: string
+  remember?: boolean
+}
+
+/** 登录返回（token 主要从响应头 Authorization 读取，这里兜底 body 返回） */
+export interface LoginResult {
+  token?: string
+  user?: CurrentUser
+}
