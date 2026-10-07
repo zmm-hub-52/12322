@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "微服务生态底座 · 审批流业务架构",
+    "output": "microservice-platform-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "aad", "type": "external", "label": "微软 AAD", "sublabel": "OIDC 身份源", "pos": [40, 30], "size": [150, 56] },
+    { "id": "llm", "type": "external", "label": "通义千问 / LLM", "sublabel": "大模型", "pos": [1300, 30], "size": [150, 56] },
+    { "id": "client", "type": "frontend", "label": "前端应用", "sublabel": "无界 1.0.28 · Vue 3.5", "tag": "Element Plus 2.13 · iX 5.2", "pos": [40, 130], "size": [220, 72] },
+    { "id": "approval-ui", "type": "frontend", "label": "审批中心子应用", "sublabel": "无界子应用 · Vue 3.5", "tag": "审批流前端", "pos": [40, 240], "size": [220, 72] },
+    { "id": "gateway", "type": "backend", "label": "API 网关", "sublabel": "Spring Boot 3.5.5 · SC 2025.0", "tag": "路由/限流/JWT 验签", "pos": [400, 185], "size": [230, 72] },
+    { "id": "nacos", "type": "cloud", "label": "Nacos 3.0.3", "sublabel": "注册/配置中心", "tag": "MCP Registry", "pos": [710, 185], "size": [230, 72] },
+    { "id": "approval-service", "type": "backend", "label": "审批业务服务", "sublabel": "approval-service", "tag": "Spring Boot 3.5.5", "pos": [460, 360], "size": [230, 64] },
+    { "id": "iam", "type": "security", "label": "IAM 身份权限中心", "tag": "AAD + sa-token", "pos": [40, 490], "size": [180, 60] },
+    { "id": "workflow", "type": "backend", "label": "工作流服务", "tag": "Flowable 8.0.0", "pos": [250, 490], "size": [150, 60] },
+    { "id": "file", "type": "backend", "label": "文件存储服务", "tag": "MinIO/OSS", "pos": [430, 490], "size": [150, 60] },
+    { "id": "notify", "type": "backend", "label": "通知服务", "tag": "短信/邮件", "pos": [680, 490], "size": [150, 60] },
+    { "id": "job", "type": "backend", "label": "任务调度", "tag": "SnailJob 1.8.1", "pos": [860, 490], "size": [150, 60] },
+    { "id": "ai", "type": "backend", "label": "AI 能力中心", "tag": "Spring AI Alibaba 1.0.0", "pos": [1040, 490], "size": [200, 60] },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "7.4 · 缓存", "pos": [160, 630], "size": [140, 60] },
+    { "id": "mysql", "type": "database", "label": "MySQL", "sublabel": "8.4 · 流程/底座数据", "pos": [360, 630], "size": [140, 60] },
+    { "id": "sqlserver", "type": "database", "label": "SQL Server", "sublabel": "2022 · 审批数据", "pos": [580, 630], "size": [160, 60] },
+    { "id": "mq", "type": "messagebus", "label": "RocketMQ", "sublabel": "5.3.3 · 消息队列", "pos": [780, 630], "size": [150, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "服务治理层", "wraps": ["nacos"] },
+    { "kind": "region", "label": "业务服务层", "wraps": ["approval-service"] },
+    { "kind": "region", "label": "公共服务层", "wraps": ["iam", "workflow", "file", "notify", "job", "ai"] },
+    { "kind": "region", "label": "基础设施层", "wraps": ["redis", "mysql", "sqlserver", "mq"] }
+  ],
+  "connections": [
+    { "id": "mount", "from": "client", "to": "approval-ui", "label": "挂载", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelAt": [150, 216] },
+    { "id": "ui-approval", "from": "approval-ui", "to": "gateway", "label": "HTTPS", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "ui-shell", "from": "client", "to": "gateway", "label": "HTTPS", "fromSide": "right", "toSide": "left" },
+    { "id": "login", "from": "client", "to": "aad", "label": "OIDC 登录", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "route-approval", "from": "gateway", "to": "approval-service", "label": "审批请求", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "discover", "from": "gateway", "to": "nacos", "label": "注册 · 配置", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "flow", "from": "approval-service", "to": "workflow", "label": "流程流转", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "authz", "from": "approval-service", "to": "iam", "label": "鉴权/用户", "fromSide": "bottom", "toSide": "top" },
+    { "id": "notify-call", "from": "approval-service", "to": "notify", "fromSide": "bottom", "toSide": "top" },
+    { "id": "attach", "from": "approval-service", "to": "file", "fromSide": "bottom", "toSide": "top" },
+    { "id": "urge", "from": "approval-service", "to": "job", "fromSide": "bottom", "toSide": "top" },
+    { "id": "biz-data", "from": "approval-service", "to": "sqlserver", "label": "业务数据", "fromSide": "bottom", "toSide": "top", "labelAt": [621, 560] },
+    { "id": "svc-register", "from": "approval-service", "to": "nacos", "label": "注册", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "mcp", "from": "nacos", "to": "ai", "label": "MCP 工具注册", "variant": "dashed", "fromSide": "bottom", "toSide": "top" },
+    { "id": "model", "from": "ai", "to": "llm", "label": "调用大模型", "fromSide": "top", "toSide": "bottom" },
+    { "id": "cache", "from": "iam", "to": "redis", "label": "会话缓存", "fromSide": "bottom", "toSide": "top" },
+    { "id": "msg", "from": "notify", "to": "mq", "label": "异步消息", "fromSide": "bottom", "toSide": "top" },
+    { "id": "persist", "from": "workflow", "to": "mysql", "label": "流程数据", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "接入与治理", "items": ["Java 21 · Spring Boot 3.5.5 · Spring Cloud 2025.0", "无界 1.0.28 壳子 + 审批中心子应用", "Nacos 3.0.3 注册/配置 + MCP Registry"] },
+    { "dot": "emerald", "title": "审批流业务（复用底座）", "items": ["审批业务服务调工作流 Flowable 8.0.0 流转", "复用 IAM / 通知 / 文件 / 任务调度", "审批数据落 SQL Server 2022"] },
+    { "dot": "violet", "title": "基础设施与外部", "items": ["Redis 7.4 · MySQL 8.4 · SQL Server 2022 · RocketMQ 5.3.3", "微软 AAD 身份源 + 通义大模型"] }
+  ]
+}
