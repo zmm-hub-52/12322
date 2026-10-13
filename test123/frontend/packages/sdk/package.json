@@ -1,0 +1,15 @@
+{
+  "name": "@platform/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共请求封装（axios）+ 跨应用通信契约常量",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.9"
+  }
+}
