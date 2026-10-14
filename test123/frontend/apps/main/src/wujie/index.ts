@@ -1,27 +1,17 @@
 import { bus } from 'wujie';
 import { useUserStore } from '../stores/user';
-import { useThemeStore } from '../stores/theme';
 import { BUS_EVENTS } from '@platform/sdk';
 
 /**
- * 跨应用桥初始化。
+ * 主应用跨应用事件初始化。
  *
- * 主应用将 token/用户/主题 读取函数暴露在 window.__PLATFORM__ 上，
- * 子应用（同域 iframe）通过 window.parent.__PLATFORM__ 实时读取。
- *
- * 为什么用 window 暴露而不是 props 快照：
- * - props 是 startApp 时的一次性快照，token/用户变化后子应用拿不到新值；
- * - 同域 iframe 可直接访问 window.parent，实时性最好。
+ * 实时数据（token/用户/主题）不再通过 window 全局桥暴露，
+ * 而是经 props 传函数下发给子应用（见 useTabs 的 props 工厂），
+ * 子应用每次调用 props.getToken() 即可拿到最新值。
+ * 这里只负责监听子应用上报的事件。
  */
-export function initPlatformBridge(): void {
+export function initPlatformEvents(): void {
   const userStore = useUserStore();
-  const themeStore = useThemeStore();
-
-  window.__PLATFORM__ = {
-    getToken: () => userStore.token || null,
-    getUser: () => userStore.userInfo,
-    getTheme: () => themeStore.mode,
-  };
 
   // 监听子应用上报的 token 过期事件，统一处理（刷新 token 或跳登录）
   bus.$on(BUS_EVENTS.TOKEN_EXPIRED, () => {

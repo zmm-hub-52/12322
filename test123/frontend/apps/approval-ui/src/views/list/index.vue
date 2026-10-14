@@ -1,30 +1,36 @@
 <template>
   <div class="approval-list">
-    <PageHeader title="审批列表" subtitle="审批中心 · 查询类页面示例" />
+    <PageHeader :title="t('list.title')" :subtitle="t('list.subtitle')" />
 
-    <!-- 查询区 -->
-    <form class="search-bar" @submit.prevent="onSearch">
-      <input v-model="query.keyword" class="field" type="text" placeholder="单号 / 申请人" />
-      <select v-model="query.status" class="field">
-        <option value="">全部状态</option>
-        <option value="pending">待审批</option>
-        <option value="approved">已通过</option>
-        <option value="rejected">已驳回</option>
-      </select>
-      <button type="submit" class="btn btn--primary">查询</button>
-      <button type="button" class="btn" @click="onReset">重置</button>
-    </form>
+    <!-- 查询区（西门子 iX 组件） -->
+    <div class="search-bar">
+      <IxInput
+        v-model="query.keyword"
+        class="search-bar__field"
+        :placeholder="t('list.keywordPlaceholder')"
+      />
+      <IxSelect v-model="query.status" class="search-bar__field search-bar__field--select">
+        <IxSelectItem :label="t('list.allStatus')" value="" />
+        <IxSelectItem :label="t('list.statusPending')" value="pending" />
+        <IxSelectItem :label="t('list.statusApproved')" value="approved" />
+        <IxSelectItem :label="t('list.statusRejected')" value="rejected" />
+      </IxSelect>
+      <IxButton variant="primary" :disabled="loading" @click="onSearch">
+        {{ t('list.search') }}
+      </IxButton>
+      <IxButton @click="onReset">{{ t('list.reset') }}</IxButton>
+    </div>
 
-    <!-- 结果表格（原生 table + 品牌 CSS 变量） -->
+    <!-- 结果表格（iX v5 移除了内置表格，用原生 table + iX 主题变量） -->
     <table class="table">
       <thead>
         <tr>
-          <th>单号</th>
-          <th>标题</th>
-          <th>申请人</th>
-          <th>状态</th>
-          <th>申请时间</th>
-          <th>操作</th>
+          <th>{{ t('list.colNo') }}</th>
+          <th>{{ t('list.colTitle') }}</th>
+          <th>{{ t('list.colApplicant') }}</th>
+          <th>{{ t('list.colStatus') }}</th>
+          <th>{{ t('list.colTime') }}</th>
+          <th>{{ t('list.colAction') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -37,11 +43,11 @@
           </td>
           <td>{{ row.time }}</td>
           <td>
-            <a class="link" @click="goDetail(row.id)">查看</a>
+            <a class="link" @click="goDetail(row.id)">{{ t('list.view') }}</a>
           </td>
         </tr>
         <tr v-if="filteredRows.length === 0">
-          <td colspan="6" class="empty">暂无数据</td>
+          <td colspan="6" class="empty">{{ t('list.empty') }}</td>
         </tr>
       </tbody>
     </table>
@@ -50,36 +56,51 @@
 
 <script setup lang="ts">
 /**
- * 审批列表（查询类页面示例）
+ * 审批列表（查询类页面示例，使用西门子 iX 组件）
  *
  * 说明：
- * 1. 本页为「查询类页面」，在保活模式下若需要激活时重新拉取数据，
- *    可在无界的 activated 生命周期（startApp 参数）或 bus 事件中触发刷新；
- *    当前平台采用「10 分钟超时销毁 → 重新加载」策略，数据天然刷新。
- * 2. 真实接口应走 @platform/sdk 的 createHttp 统一客户端，这里用 mock 数据演示。
+ * 1. 表单/交互用 iX 组件（IxInput / IxSelect / IxButton），布局用品牌 CSS 变量；
+ *    iX v5 无表格组件，列表用原生 table + iX 主题变量。
+ * 2. 真实接口走 @platform/sdk 的 createSubAppHttp（见 api/approval.ts），后端未启动时回退 mock。
+ * 3. 文案走 vue-i18n（中/英/德），语言切换由主应用经 bus 广播同步。
  */
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { PageHeader } from '@platform/ui-components';
+import { useI18n } from 'vue-i18n';
+import { IxButton, IxInput, IxSelect, IxSelectItem, PageHeader } from '@platform/ui-components';
+import { fetchApprovalList, type ApprovalRecord } from '../../api/approval';
 
-interface ApprovalRow {
-  id: string;
-  no: string;
-  title: string;
-  applicant: string;
-  status: 'pending' | 'approved' | 'rejected';
-  time: string;
-}
+const { t } = useI18n();
 
-// mock 数据（真实场景替换为 sdk 接口返回）
-const rows = ref<ApprovalRow[]>([
+// mock 兜底数据（后端未启动时使用；接好真实后端后可删除）
+const MOCK_ROWS: ApprovalRecord[] = [
   { id: '1', no: 'SP-2024-0001', title: '设备维修费用审批', applicant: '张三', status: 'pending', time: '2024-06-01 10:00' },
   { id: '2', no: 'SP-2024-0002', title: '备件采购申请', applicant: '李四', status: 'approved', time: '2024-06-02 14:30' },
   { id: '3', no: 'SP-2024-0003', title: '差旅报销', applicant: '王五', status: 'rejected', time: '2024-06-03 09:15' },
-]);
+];
+
+// 数据行（初始为空，onMounted 时从接口加载）
+const rows = ref<ApprovalRecord[]>([]);
+const loading = ref(false);
 
 const query = reactive({ keyword: '', status: '' });
 const router = useRouter();
+
+/** 加载列表数据（真实接口 + mock 兜底） */
+async function loadData(): Promise<void> {
+  loading.value = true;
+  try {
+    rows.value = await fetchApprovalList({ keyword: query.keyword, status: query.status });
+  } catch (e) {
+    // 后端未启动时回退 mock，避免白屏（接好真实后端后删除此兜底）
+    console.warn('[approval] 接口未就绪，回退 mock 数据', e);
+    rows.value = MOCK_ROWS;
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadData);
 
 // 按查询条件过滤（内存过滤，真实场景为服务端过滤）
 const filteredRows = computed(() =>
@@ -91,19 +112,22 @@ const filteredRows = computed(() =>
 );
 
 function onSearch(): void {
-  // 真实场景：调用 sdk 接口，携带 query 查询
+  void loadData();
 }
 
 function onReset(): void {
   query.keyword = '';
   query.status = '';
+  void loadData();
 }
 
-function statusText(status: ApprovalRow['status']): string {
-  return { pending: '待审批', approved: '已通过', rejected: '已驳回' }[status];
+/** 状态文案（i18n：pending/approved/rejected -> list.statusPending/Approved/Rejected） */
+function statusText(status: ApprovalRecord['status']): string {
+  const key = `list.status${status.charAt(0).toUpperCase()}${status.slice(1)}` as const;
+  return t(key);
 }
 
-function statusClass(status: ApprovalRow['status']): string {
+function statusClass(status: ApprovalRecord['status']): string {
   return `tag--${status}`;
 }
 
@@ -118,31 +142,15 @@ function goDetail(id: string): void {
 }
 .search-bar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-.field {
-  padding: 6px 8px;
-  border: 1px solid var(--brand-border);
-  border-radius: var(--brand-radius);
-  background: var(--brand-bg);
-  color: var(--brand-text);
+.search-bar__field {
+  width: 220px;
 }
-.btn {
-  padding: 6px 12px;
-  border: 1px solid var(--brand-border);
-  border-radius: var(--brand-radius);
-  background: var(--brand-bg-secondary);
-  color: var(--brand-text);
-  cursor: pointer;
-}
-.btn--primary {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: #fff;
-}
-.btn--primary:hover {
-  background: var(--brand-primary-hover);
+.search-bar__field--select {
+  width: 160px;
 }
 .table {
   width: 100%;

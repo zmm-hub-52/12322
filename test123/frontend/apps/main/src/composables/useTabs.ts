@@ -19,10 +19,15 @@ export function useTabs(router: Router) {
     // 空闲超时（毫秒）：默认 10 分钟（保活实例超过该时长未被激活则自动销毁）。
     // 可用 VITE_TAB_IDLE_TIMEOUT 覆盖，便于联调与自动化验证。
     idleTimeout: Number(import.meta.env.VITE_TAB_IDLE_TIMEOUT) || 10 * 60 * 1000,
-    // 注入给子应用的 props（每次 startApp 时调用，拿到最新用户信息快照）
+    // 注入给子应用的 props：
+    // - 数据（user）是快照，静态展示用；
+    // - 函数（getToken/getUser/getTheme/jump）是活引用，子应用每次调用拿最新值。
+    // 默认 iframe 同域下函数可跨应用传递（降级模式跨域则不可用，但本项目走默认模式）。
     props: (tab) => ({
       user: userStore.userInfo,
-      theme: themeStore.mode,
+      getToken: () => userStore.token || null,
+      getUser: () => userStore.userInfo,
+      getTheme: () => themeStore.mode,
       // 跨应用跳转：子应用通过 window.$wujie.props.jump 跳主应用其他菜单
       jump: (path: string) => router.push(path),
     }),

@@ -11,17 +11,20 @@ export type ThemeMode = 'light' | 'dark';
 export const THEME_STORAGE_KEY = 'platform-theme';
 
 /**
- * 应用主题：在 document.documentElement（<html>）上设置 data-theme 属性。
- * CSS 变量会随该属性自动切换（见 theme.css）。
+ * 应用主题：在 document.documentElement（<html>）上设置 iX 主题属性。
+ * - data-ix-theme="classic"：西门子 classic 品牌主题
+ * - data-ix-color-schema="light|dark"：明/暗色系（iX 的 --theme-* 变量随它自动切换）
  * @param theme 目标主题 'light' | 'dark'
  */
 export function applyTheme(theme: ThemeMode): void {
-  document.documentElement.setAttribute('data-theme', theme);
+  const root = document.documentElement;
+  root.setAttribute('data-ix-theme', 'classic');
+  root.setAttribute('data-ix-color-schema', theme);
 }
 
 /** 读取当前页面实际生效的主题（缺省视为 light） */
 export function getCurrentTheme(): ThemeMode {
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  return document.documentElement.getAttribute('data-ix-color-schema') === 'dark' ? 'dark' : 'light';
 }
 
 /** 从 localStorage 读取上次保存的主题偏好，默认 light */

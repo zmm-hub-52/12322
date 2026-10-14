@@ -3,6 +3,9 @@ import { createRouter, createWebHistory, type Router } from 'vue-router';
 import App from './App.vue';
 import { routes } from './router';
 import { initTheme } from './theme';
+import { i18n, initLocale } from './i18n';
+import { defineCustomElements } from '@siemens/ix/loader';
+import { defineCustomElements as defineIxIcons } from '@siemens/ix-icons/loader';
 import '@platform/ui-theme/theme.css';
 
 /**
@@ -16,6 +19,10 @@ import '@platform/ui-theme/theme.css';
  *   否则无界可能在 vite 尚未加载完成时就调用 mount 导致挂空。
  */
 
+// 注册 iX Web Components 与图标（子应用在无界 iframe 中拥有独立 window，需各自注册）
+defineCustomElements();
+defineIxIcons();
+
 let app: VueApp | null = null;
 let router: Router | null = null;
 
@@ -24,6 +31,7 @@ function mount(): void {
   router = createRouter({ history: createWebHistory('/'), routes });
   app = createApp(App);
   app.use(router);
+  app.use(i18n);
   app.mount('#app');
 }
 
@@ -47,3 +55,5 @@ if (window.__POWERED_BY_WUJIE__) {
 
 // 初始化主题（独立运行也能切换；无界环境下监听主应用 bus 广播）
 initTheme();
+// 初始化语言（独立运行读 localStorage；无界环境下监听主应用 bus 广播）
+initLocale();

@@ -2,10 +2,10 @@
   <div class="layout">
     <!-- 侧边菜单 -->
     <aside class="layout__sidebar">
-      <div class="layout__brand">微服务生态底座</div>
+      <div class="layout__brand"><AppLogo show-text /></div>
       <nav class="menu">
-        <a v-for="item in menus" :key="item.title" class="menu__item" @click="onMenuClick(item)">
-          {{ item.title }}
+        <a v-for="item in menus" :key="item.titleKey" class="menu__item" @click="onMenuClick(item)">
+          {{ t(item.titleKey) }}
         </a>
       </nav>
     </aside>
@@ -14,13 +14,18 @@
     <div class="layout__main">
       <!-- 顶栏 -->
       <header class="topbar">
-        <a class="topbar__home" @click="onHomeClick">首页</a>
+        <a class="topbar__home" @click="onHomeClick">{{ t('common.home') }}</a>
         <div class="topbar__right">
           <button class="btn" @click="themeStore.toggle()">
-            {{ themeStore.mode === 'light' ? '深色' : '浅色' }}
+            {{ themeStore.mode === 'light' ? t('common.dark') : t('common.light') }}
           </button>
-          <span class="topbar__user">{{ userStore.userInfo?.name ?? '未登录' }}</span>
-          <button class="btn" @click="onLogout">退出</button>
+          <select class="btn" :value="localeStore.locale" @change="onLocaleChange">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </select>
+          <span class="topbar__user">{{ userStore.userInfo?.name ?? t('common.notLoggedIn') }}</span>
+          <button class="btn" @click="onLogout">{{ t('common.logout') }}</button>
         </div>
       </header>
 
@@ -58,15 +63,21 @@
  * 无界子应用实例挂载进各自的容器，保活模式下切走不销毁。
  */
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { menus, resolveSubAppUrl, type MenuItem } from '../config/menu';
 import { useTabs } from '../composables/useTabs';
 import { useUserStore } from '../stores/user';
 import { useThemeStore } from '../stores/theme';
+import { useLocaleStore } from '../stores/locale';
+import type { Locale } from '../i18n';
 import Tabbar from '../components/Tabbar.vue';
+import AppLogo from '../components/AppLogo.vue';
 
 const router = useRouter();
+const { t } = useI18n();
 const userStore = useUserStore();
 const themeStore = useThemeStore();
+const localeStore = useLocaleStore();
 const tabs = useTabs(router);
 
 // 初始化：恢复 sessionStorage 的 tab 列表（激活的立即挂载，其余懒加载）
@@ -76,10 +87,16 @@ tabs.init();
 function onMenuClick(item: MenuItem): void {
   tabs.openTab({
     appName: item.appName,
-    title: item.title,
+    title: t(item.titleKey),
     url: resolveSubAppUrl(item.appName, item.route),
     route: item.route,
   });
+}
+
+/** 切换语言（经 locale store 广播给所有子应用） */
+function onLocaleChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value as Locale;
+  localeStore.setLocale(value);
 }
 
 /** 点击首页：取消激活所有 tab，回到欢迎页 */
@@ -112,10 +129,9 @@ function onLogout(): void {
 }
 .layout__brand {
   height: 48px;
-  line-height: 48px;
+  display: flex;
+  align-items: center;
   padding: 0 16px;
-  font-weight: 700;
-  color: var(--brand-primary);
   border-bottom: 1px solid var(--brand-border);
 }
 .menu {

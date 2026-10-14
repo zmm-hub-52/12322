@@ -4,4 +4,5 @@
  */
 export * from './contract';
 export * from './http';
+export * from './subApp';
 export * from './types';

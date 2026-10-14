@@ -1,8 +1,8 @@
 <template>
   <div class="approval-detail">
-    <PageHeader title="审批详情" :subtitle="`单号：${id}`" />
-    <p class="hint">这是详情占位页，用于演示「同一子应用多个内部路由」。</p>
-    <a class="link" @click="router.push('/approval/list')">← 返回列表</a>
+    <PageHeader :title="t('detail.title')" :subtitle="`${t('detail.no')}：${id}`" />
+    <p class="hint">{{ t('detail.hint') }}</p>
+    <a class="link" @click="router.push('/approval/list')">{{ t('detail.back') }}</a>
   </div>
 </template>
 
@@ -13,8 +13,10 @@
  * 主应用侧通过「唯一实例名 + appName 分组」让它们各自独立 tab。
  */
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { PageHeader } from '@platform/ui-components';
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const id = route.params.id ?? '-';

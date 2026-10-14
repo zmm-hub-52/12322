@@ -14,8 +14,8 @@ export const appRegistry: Record<string, { baseUrl: string; title: string }> = {
 
 /** 菜单项 */
 export interface MenuItem {
-  /** 菜单标题（也作为 Tab 标题） */
-  title: string;
+  /** 菜单标题的 i18n key（渲染时用 $t 翻译，也作为 Tab 标题） */
+  titleKey: string;
   /** 逻辑子应用名（对应 appRegistry 的 key） */
   appName: string;
   /** 子应用内部路由路径 */
@@ -24,8 +24,8 @@ export interface MenuItem {
 
 /** 菜单配置（真实场景由后端菜单接口下发 + 权限过滤） */
 export const menus: MenuItem[] = [
-  { title: '审批列表', appName: 'approval', route: '/approval/list' },
-  { title: '审批详情', appName: 'approval', route: '/approval/detail/SP-2024-0001' },
+  { titleKey: 'menu.approvalList', appName: 'approval', route: '/approval/list' },
+  { titleKey: 'menu.approvalDetail', appName: 'approval', route: '/approval/detail/SP-2024-0001' },
 ];
 
 /** 根据 appName + route 拼接子应用完整入口 url */

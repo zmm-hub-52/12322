@@ -7,6 +7,8 @@
 export const BUS_EVENTS = {
   /** 主题切换：主应用 -> 子应用；payload 为 'light' | 'dark' */
   THEME_CHANGE: 'platform:theme-change',
+  /** 语言切换：主应用 -> 子应用；payload 为 'zh' | 'en' | 'de' */
+  LOCALE_CHANGE: 'platform:locale-change',
   /** token 过期/未授权：子应用 -> 主应用；通知主应用刷新 token 或跳转登录 */
   TOKEN_EXPIRED: 'platform:token-expired',
   /** 用户信息变化：主应用 -> 子应用；payload 为最新用户信息对象 */

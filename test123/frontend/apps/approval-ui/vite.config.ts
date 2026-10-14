@@ -9,7 +9,16 @@ import vue from '@vitejs/plugin-vue';
  * 2. 端口 5174（主应用 5173），避免冲突。
  */
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          // iX 的 <ix-*> 是 Web Components，告诉 Vue 编译器不要把它们当普通组件解析
+          isCustomElement: (tag) => tag.startsWith('ix-'),
+        },
+      },
+    }),
+  ],
   server: {
     port: 5174,
     cors: true,

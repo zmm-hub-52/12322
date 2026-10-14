@@ -1,37 +1,46 @@
 /* ============================================================
- * 品牌主题变量（单一主题源）
+ * 品牌主题：西门子 iX classic（不自定义色值，统一走 iX token）
  *
- * 使用说明：
- * 1. 主应用与每个子应用都必须引入本文件（无界 iframe 隔离下，
- *    主应用 :root 的变量不会穿透到子应用，所以各自引入保证统一）。
- * 2. 主题切换：在 <html> 上设置 data-theme="light|dark" 即可。
- * 3. 业务样式一律引用这里的 CSS 变量，不要写死颜色值。
+ * 机制：
+ * 1. 引入 iX 完整样式（含组件 + classic 主题的 light/dark 两套 token）
+ * 2. 在 <html> 上设置 data-ix-theme="classic" + data-ix-color-schema="light|dark"
+ *    即完成主题切换（iX 的 --theme-* 变量随 color-schema 自动切换）
+ * 3. 下方 --brand-* 是本项目语义别名，映射到 iX 的 --theme-* token；
+ *    业务组件统一用 --brand-*，底层取值来自西门子 iX（主色 #006e93）。
+ *
+ * 注意：无界 iframe 隔离下，主应用的变量不会穿透到子应用，
+ *       所以每个应用各自引入本文件保证品牌统一。
  * ============================================================ */
 
-:root {
+@import '@siemens/ix/dist/siemens-ix/siemens-ix.css';
+
+/* 语义别名（映射到 iX token）。
+ * 注意：必须用「纯属性选择器」而非 :root —— 在无界 shadow DOM 里，
+ * :root 匹配的是 shadow host（<wujie-app>），匹配不到子应用的 <html>，
+ * 会导致深色背景等覆盖失效。这里与 iX token 的选择器保持一致。 */
+[data-ix-theme='classic'] {
   color-scheme: light;
 
   /* 品牌主色 */
-  --brand-primary: #006e93;
-  --brand-primary-hover: #005c7a;
-  --brand-primary-light: #e6f2f6;
+  --brand-primary: var(--theme-color-primary);
+  --brand-primary-hover: var(--theme-color-primary--hover);
 
   /* 背景与文本 */
   --brand-bg: #ffffff;
   --brand-bg-secondary: #f5f7f9;
   --brand-bg-tertiary: #eef1f4;
-  --brand-text: #1a1d21;
-  --brand-text-secondary: #5a6068;
-  --brand-text-disabled: #9aa1a9;
+  --brand-text: var(--theme-color-std-text);
+  --brand-text-secondary: var(--theme-color-soft-text);
+  --brand-text-disabled: var(--theme-color-weak-text);
 
   /* 边框 */
-  --brand-border: #d8dde3;
-  --brand-border-strong: #b9c1ca;
+  --brand-border: var(--theme-color-soft-bdr);
+  --brand-border-strong: var(--theme-color-std-bdr);
 
   /* 功能色 */
-  --brand-success: #1a8a5c;
-  --brand-warning: #d9822b;
-  --brand-danger: #c2302e;
+  --brand-success: var(--theme-color-success);
+  --brand-warning: var(--theme-color-warning);
+  --brand-danger: var(--theme-color-alarm);
 
   /* 圆角 / 阴影 */
   --brand-radius: 4px;
@@ -39,27 +48,11 @@
   --brand-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
-/* 深色主题 */
-:root[data-theme='dark'] {
+/* 深色主题下额外覆盖（背景色单独给，其余沿用 iX dark token） */
+[data-ix-theme='classic'][data-ix-color-schema='dark'] {
   color-scheme: dark;
-
-  --brand-primary: #3aa6c4;
-  --brand-primary-hover: #54b8d4;
-  --brand-primary-light: #17323d;
-
   --brand-bg: #17191c;
   --brand-bg-secondary: #1f2328;
   --brand-bg-tertiary: #2a2f36;
-  --brand-text: #e8eaed;
-  --brand-text-secondary: #a6adb5;
-  --brand-text-disabled: #6c747d;
-
-  --brand-border: #33383f;
-  --brand-border-strong: #4a525c;
-
-  --brand-success: #34b077;
-  --brand-warning: #e0a04b;
-  --brand-danger: #e05a58;
-
   --brand-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }

@@ -2,8 +2,8 @@
   <div class="app-shell">
     <!-- 子应用顶部条：展示从主应用 props 下发的用户信息（静态快照） -->
     <div class="app-bar">
-      <span class="app-bar__title">审批中心</span>
-      <span v-if="userName" class="app-bar__user">当前用户：{{ userName }}</span>
+      <span class="app-bar__title">{{ t('app.title') }}</span>
+      <span v-if="userName" class="app-bar__user">{{ t('app.currentUser') }}：{{ userName }}</span>
     </div>
     <router-view />
   </div>
@@ -16,6 +16,9 @@
  *       子应用不自存 token、不自行拉取用户信息。
  */
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 // 从无界注入的 props 中读取用户信息快照
 const userName = computed(() => {

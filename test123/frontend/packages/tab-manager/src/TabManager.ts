@@ -21,7 +21,7 @@ import type {
  * 设计说明（与无界保活模式的关系）：
  * - 无界保活模式（alive: true）下，同一个 name 改 url 无法跳转不同路由，
  *   因此「一个子应用多个菜单项」必须各自使用唯一 name（一个 tab 一个实例）。
- * - appName 用于逻辑分组（统计某子应用还开着几个 tab），实例生命周期由 tab 自己管。
+ * - appName 标识 tab 所属的逻辑子应用；实例生命周期由 tab 自己管（一个 tab 一个实例）。
  */
 export class TabManager {
   /** 所有打开的 tab（有序） */
@@ -42,6 +42,8 @@ export class TabManager {
   private readonly onLoadError?: TabManagerOptions['onLoadError'];
   /** 是否降级 iframe（默认 false，走无界默认隔离） */
   private readonly degrade: boolean;
+  /** 保活实例上限，超过则按「最早打开」淘汰非激活实例 */
+  private readonly maxAlive: number;
   /** 自增序号，用于生成唯一 id */
   private seq = 0;
 
@@ -51,6 +53,7 @@ export class TabManager {
     this.props = options.props;
     this.onLoadError = options.onLoadError;
     this.degrade = options.degrade ?? false;
+    this.maxAlive = options.maxAlive ?? 6; // 默认最多保活 6 个实例
   }
 
   // ---------------------------------------------------------------------
@@ -85,11 +88,6 @@ export class TabManager {
   /** 获取指定实例的状态 */
   getInstanceStatus(name: string): InstanceStatus | undefined {
     return this.instances.get(name)?.status;
-  }
-
-  /** 某逻辑子应用当前打开的 tab 数量（引用计数语义） */
-  getAppTabCount(appName: string): number {
-    return this.tabs.filter((t) => t.appName === appName).length;
   }
 
   /** 判断某 tab 是否需要挂载（无实例 / 已销毁 / 加载失败） */
@@ -166,6 +164,9 @@ export class TabManager {
       } else {
         this.startIdleTimer(record);
       }
+
+      // 数量兜底：存活实例超过上限，淘汰最早打开的非激活实例
+      this.evictIfNeeded();
     } catch (e) {
       record.status = 'error';
       this.onLoadError?.(tab, e as Error);
@@ -331,11 +332,7 @@ export class TabManager {
   private startIdleTimer(record: InstanceRecord): void {
     this.clearIdleTimer(record);
     record.idleTimer = window.setTimeout(() => {
-      record.destroy?.();
-      destroyApp(record.name);
-      record.status = 'destroyed';
-      record.destroy = null;
-      record.idleTimer = null;
+      this.destroyInstance(record);
       this.notify();
     }, this.idleTimeout);
   }
@@ -345,6 +342,38 @@ export class TabManager {
     if (record.idleTimer != null) {
       window.clearTimeout(record.idleTimer);
       record.idleTimer = null;
+    }
+  }
+
+  /**
+   * 销毁一个实例（超时销毁 / 数量淘汰共用）。
+   * 只销毁实例本身，tab 保留、状态标记为 destroyed，下次激活时重新加载。
+   */
+  private destroyInstance(record: InstanceRecord): void {
+    this.clearIdleTimer(record);
+    record.destroy?.();
+    destroyApp(record.name);
+    record.status = 'destroyed';
+    record.destroy = null;
+    record.idleTimer = null;
+  }
+
+  /**
+   * 数量兜底：存活（loaded）实例数超过 maxAlive 时，
+   * 按 tab 打开顺序（this.tabs 有序）淘汰最早打开的那个「非激活」实例。
+   * 与 10 分钟定时器互补：定时器清「时间维度」的后台僵尸，这里挡「数量维度」的内存峰值。
+   */
+  private evictIfNeeded(): void {
+    const aliveCount = [...this.instances.values()].filter((r) => r.status === 'loaded').length;
+    if (aliveCount <= this.maxAlive) return;
+    for (const tab of this.tabs) {
+      if (tab.id === this.activeTabId) continue; // 永不淘汰当前激活的
+      const record = this.instances.get(tab.name);
+      if (record && record.status === 'loaded') {
+        this.destroyInstance(record);
+        this.notify();
+        return;
+      }
     }
   }
 }

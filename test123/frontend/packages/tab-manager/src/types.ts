@@ -6,7 +6,7 @@
 export interface TabMeta {
   /** tab 唯一 id（稳定；持久化后刷新恢复不丢） */
   id: string;
-  /** 逻辑子应用名（如 approval），用于分组统计「该子应用还有几个 tab」 */
+  /** 逻辑子应用名（如 approval），标识该 tab 属于哪个子应用 */
   appName: string;
   /** 无界实例名（唯一，形如 `${appName}-${id}`），保活模式下必须每个 tab 独立 */
   name: string;
@@ -71,6 +71,8 @@ export interface TabManagerOptions {
   props?: PropsFactory;
   /** 子应用加载失败回调（骨架屏/重试/兜底入口） */
   onLoadError?: (tab: TabMeta, error: Error) => void;
+  /** 保活实例上限（默认 6）：存活实例数超过时，按「最早打开」淘汰非激活实例，防止内存峰值 */
+  maxAlive?: number;
   /**
    * 是否采用降级 iframe 方案（degrade），默认 false。
    * false（默认）：无界默认 iframe 隔离，同域，window.parent 跨应用桥可用；

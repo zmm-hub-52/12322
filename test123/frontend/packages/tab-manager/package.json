@@ -10,6 +10,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "wujie": "^1.0.28"
+    "wujie": "^2.1.0"
   }
 }

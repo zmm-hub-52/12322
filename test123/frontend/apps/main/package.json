@@ -13,10 +13,14 @@
     "@platform/sdk": "workspace:*",
     "@platform/tab-manager": "workspace:*",
     "@platform/ui-theme": "workspace:*",
+    "@siemens/ix": "5.2.1",
+    "@siemens/ix-icons": "^3.7.0",
+    "@siemens/ix-vue": "5.2.1",
     "pinia": "^3.0.1",
-    "vue": "^3.5.13",
+    "vue": "^3.5.43",
+    "vue-i18n": "^11.4.14",
     "vue-router": "^4.5.0",
-    "wujie": "^1.0.28"
+    "wujie": "^2.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
