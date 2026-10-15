@@ -1,6 +1,7 @@
 <template>
   <div class="approval-detail">
-    <PageHeader :title="t('detail.title')" :subtitle="`${t('detail.no')}：${id}`" />
+    <h2 class="typography-h2">{{ t('detail.title') }}</h2>
+    <p class="typography-body">{{ t('detail.no') }}：{{ id }}</p>
     <p class="hint">{{ t('detail.hint') }}</p>
     <a class="link" @click="router.push('/approval/list')">{{ t('detail.back') }}</a>
   </div>
@@ -14,7 +15,6 @@
  */
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { PageHeader } from '@platform/ui-components';
 
 const { t } = useI18n();
 const route = useRoute();

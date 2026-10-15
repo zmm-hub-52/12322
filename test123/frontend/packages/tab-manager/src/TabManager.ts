@@ -360,20 +360,21 @@ export class TabManager {
 
   /**
    * 数量兜底：存活（loaded）实例数超过 maxAlive 时，
-   * 按 tab 打开顺序（this.tabs 有序）淘汰最早打开的那个「非激活」实例。
+   * 按「最近激活时间 lastActiveAt」淘汰最久未激活的非激活实例（LRU）。
    * 与 10 分钟定时器互补：定时器清「时间维度」的后台僵尸，这里挡「数量维度」的内存峰值。
    */
   private evictIfNeeded(): void {
     const aliveCount = [...this.instances.values()].filter((r) => r.status === 'loaded').length;
     if (aliveCount <= this.maxAlive) return;
-    for (const tab of this.tabs) {
-      if (tab.id === this.activeTabId) continue; // 永不淘汰当前激活的
-      const record = this.instances.get(tab.name);
-      if (record && record.status === 'loaded') {
-        this.destroyInstance(record);
-        this.notify();
-        return;
-      }
+    // 按 lastActiveAt 升序，淘汰最久未激活的实例（LRU）；跳过当前激活的 tab
+    const victim = this.tabs
+      .filter((tab) => tab.id !== this.activeTabId)
+      .map((tab) => this.instances.get(tab.name))
+      .filter((record): record is InstanceRecord => !!record && record.status === 'loaded')
+      .sort((a, b) => a.lastActiveAt - b.lastActiveAt)[0];
+    if (victim) {
+      this.destroyInstance(victim);
+      this.notify();
     }
   }
 }

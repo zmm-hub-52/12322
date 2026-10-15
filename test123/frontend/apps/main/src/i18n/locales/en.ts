@@ -8,8 +8,9 @@ export default {
     home: 'Home',
     logout: 'Sign out',
     notLoggedIn: 'Not signed in',
-    dark: 'Dark',
-    light: 'Light',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
   },
   login: {
     title: 'Sign in',

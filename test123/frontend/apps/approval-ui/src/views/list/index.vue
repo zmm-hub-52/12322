@@ -1,6 +1,7 @@
 <template>
   <div class="approval-list">
-    <PageHeader :title="t('list.title')" :subtitle="t('list.subtitle')" />
+    <h2 class="typography-h2">{{ t('list.title') }}</h2>
+    <p class="typography-body page-subtitle">{{ t('list.subtitle') }}</p>
 
     <!-- 查询区（西门子 iX 组件） -->
     <div class="search-bar">
@@ -67,7 +68,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { IxButton, IxInput, IxSelect, IxSelectItem, PageHeader } from '@platform/ui-components';
+import { IxButton, IxInput, IxSelect, IxSelectItem } from '@platform/ui-components';
 import { fetchApprovalList, type ApprovalRecord } from '../../api/approval';
 
 const { t } = useI18n();

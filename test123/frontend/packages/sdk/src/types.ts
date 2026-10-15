@@ -39,4 +39,11 @@ export interface PlatformProps {
   getTheme?: () => 'light' | 'dark';
   /** 跨应用跳转：跳转到主应用某个路由 */
   jump?: (path: string) => void;
+  /**
+   * 全局反馈：主应用下发 showToast / showMessage。
+   * 子应用调用后由主应用统一弹（覆盖全屏，不被 iframe 边界裁剪），
+   * 保证全局反馈位置/样式一致。
+   */
+  showToast?: (...args: any[]) => unknown;
+  showMessage?: (...args: any[]) => unknown;
 }

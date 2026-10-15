@@ -16,9 +16,11 @@
       <header class="topbar">
         <a class="topbar__home" @click="onHomeClick">{{ t('common.home') }}</a>
         <div class="topbar__right">
-          <button class="btn" @click="themeStore.toggle()">
-            {{ themeStore.mode === 'light' ? t('common.dark') : t('common.light') }}
-          </button>
+          <select class="btn" :value="themeStore.variant" @change="onThemeChange">
+            <option value="system">{{ t('common.themeSystem') }}</option>
+            <option value="light">{{ t('common.themeLight') }}</option>
+            <option value="dark">{{ t('common.themeDark') }}</option>
+          </select>
           <select class="btn" :value="localeStore.locale" @change="onLocaleChange">
             <option value="zh">中文</option>
             <option value="en">English</option>
@@ -70,6 +72,7 @@ import { useUserStore } from '../stores/user';
 import { useThemeStore } from '../stores/theme';
 import { useLocaleStore } from '../stores/locale';
 import type { Locale } from '../i18n';
+import type { ThemeVariant } from '@platform/ui-theme';
 import Tabbar from '../components/Tabbar.vue';
 import AppLogo from '../components/AppLogo.vue';
 
@@ -97,6 +100,12 @@ function onMenuClick(item: MenuItem): void {
 function onLocaleChange(event: Event): void {
   const value = (event.target as HTMLSelectElement).value as Locale;
   localeStore.setLocale(value);
+}
+
+/** 切换主题（light/dark/system，经 theme store 广播给所有子应用） */
+function onThemeChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value as ThemeVariant;
+  themeStore.setVariant(value);
 }
 
 /** 点击首页：取消激活所有 tab，回到欢迎页 */

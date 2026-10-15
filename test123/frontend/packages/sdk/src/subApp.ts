@@ -1,6 +1,7 @@
 import { createHttp } from './http';
 import { BUS_EVENTS } from './contract';
 import type { PlatformProps } from './types';
+import { toast, showMessage } from '@siemens/ix';
 
 /**
  * 子应用侧专用工具：读取无界注入的 $wujie（props / bus）。
@@ -43,4 +44,21 @@ export function createSubAppHttp(baseURL?: string) {
     getToken: () => getWujie()?.props?.getToken?.() ?? null,
     onUnauthorized: () => getWujie()?.bus?.$emit(BUS_EVENTS.TOKEN_EXPIRED),
   });
+}
+
+/**
+ * 子应用专用全局反馈。
+ * 在无界环境下：调用主应用经 props 下传的 showToast / showMessage（主应用全局弹）；
+ * 独立运行时：直接回退到 iX 的 showToast / showMessage（本应用弹）。
+ * 这样保证全局反馈的归属一致（统一由宿主弹，不被 iframe 边界裁剪）。
+ */
+export function getFeedback(): {
+  showToast: (...args: any[]) => unknown;
+  showMessage: (...args: any[]) => unknown;
+} {
+  const props = getWujie()?.props;
+  return {
+    showToast: (config: any) => (props?.showToast ? props.showToast(config) : toast(config)),
+    showMessage: (config: any) => (props?.showMessage ? props.showMessage(config) : showMessage(config)),
+  };
 }

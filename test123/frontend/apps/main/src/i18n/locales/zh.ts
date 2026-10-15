@@ -8,8 +8,9 @@ export default {
     home: '首页',
     logout: '退出',
     notLoggedIn: '未登录',
-    dark: '深色',
-    light: '浅色',
+    themeSystem: '跟随系统',
+    themeLight: '浅色',
+    themeDark: '深色',
   },
   login: {
     title: '登录',

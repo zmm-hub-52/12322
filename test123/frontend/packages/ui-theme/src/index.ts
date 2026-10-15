@@ -1,38 +1,49 @@
 /**
- * @platform/ui-theme
- * 品牌主题助手。样式变量见同目录 theme.css（需在入口显式 import）。
- * 用法：`import '@platform/ui-theme/theme.css'` + `import { applyTheme } from '@platform/ui-theme'`
+ * @platform/ui-theme —— 品牌主题包入口
+ *
+ * 职责：统一西门子 iX 主题的接入、切换（含跟随系统）与持久化。
+ * 详细说明见同目录 README.md。
+ *
+ * 用法：
+ *   import '@platform/ui-theme/theme.css';  // 引入 iX 样式 + 语义别名
+ *   import { applyThemeVariant, getCurrentMode } from '@platform/ui-theme';
  */
+import {
+  themeSwitcher,
+  getCurrentSystemAppearance,
+  type ThemeMode,
+  type ThemeVariant,
+} from '@siemens/ix';
 
-/** 主题模式 */
-export type ThemeMode = 'light' | 'dark';
+// 重新导出官方 API，方便业务统一从本包导入
+export type { ThemeMode, ThemeVariant };
+export { themeSwitcher, getCurrentSystemAppearance };
 
-/** 主题持久化的 localStorage key（与主应用主题 store 保持一致） */
+/** 主题偏好持久化 key */
 export const THEME_STORAGE_KEY = 'platform-theme';
 
 /**
- * 应用主题：在 document.documentElement（<html>）上设置 iX 主题属性。
- * - data-ix-theme="classic"：西门子 classic 品牌主题
- * - data-ix-color-schema="light|dark"：明/暗色系（iX 的 --theme-* 变量随它自动切换）
- * @param theme 目标主题 'light' | 'dark'
+ * 读取持久化的主题偏好（variant），默认 'system'（跟随系统）。
  */
-export function applyTheme(theme: ThemeMode): void {
-  const root = document.documentElement;
-  root.setAttribute('data-ix-theme', 'classic');
-  root.setAttribute('data-ix-color-schema', theme);
+export function getStoredThemeVariant(): ThemeVariant {
+  const v = localStorage.getItem(THEME_STORAGE_KEY);
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
 }
 
-/** 读取当前页面实际生效的主题（缺省视为 light） */
-export function getCurrentTheme(): ThemeMode {
-  return document.documentElement.getAttribute('data-ix-color-schema') === 'dark' ? 'dark' : 'light';
+/** 持久化主题偏好 */
+export function storeThemeVariant(variant: ThemeVariant): void {
+  localStorage.setItem(THEME_STORAGE_KEY, variant);
 }
 
-/** 从 localStorage 读取上次保存的主题偏好，默认 light */
-export function getStoredTheme(): ThemeMode {
-  return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+/**
+ * 应用主题：设置西门子 classic 品牌主题 + 指定配色。
+ * @param variant 'light' | 'dark' | 'system'（system=跟随系统，由官方 themeSwitcher 监听系统偏好）
+ */
+export function applyThemeVariant(variant: ThemeVariant): void {
+  themeSwitcher.setTheme('classic', variant);
 }
 
-/** 保存主题偏好到 localStorage（下次启动恢复） */
-export function storeTheme(theme: ThemeMode): void {
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+/** 当前实际生效的模式（light/dark；system 会被解析成实际值） */
+export function getCurrentMode(): ThemeMode {
+  return themeSwitcher.getMode();
 }

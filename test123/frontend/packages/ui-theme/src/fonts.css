@@ -1,0 +1,30 @@
+/* ============================================================
+ * Siemens Sans 品牌字体
+ *
+ * 说明：
+ * Siemens Sans 是西门子的商业授权字体，@siemens/ix 5.x 的 npm 包
+ * 不再内置字体文件（CSS 里只声明了字体栈 `Siemens Sans, Arial, ...`）。
+ * 因此，若要让品牌字体真正生效（而非回退到 Arial/Helvetica），
+ * 需要拿到授权的 Siemens Sans 字体文件（woff2），放到本包 assets/fonts/ 下，
+ * 然后启用下方 @font-face（取消注释并修正文件名）。
+ *
+ * 未提供字体文件时：浏览器回退到 iX 字体栈中的 Arial/Helvetica，功能不受影响，
+ * 仅品牌字体不生效。
+ * ============================================================ */
+
+/* 启用示例（拿到授权字体文件后取消注释并修正文件名）：
+@font-face {
+  font-family: 'Siemens Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/SiemensSans-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Siemens Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/SiemensSans-Bold.woff2') format('woff2');
+}
+*/

@@ -8,8 +8,9 @@ export default {
     home: 'Startseite',
     logout: 'Abmelden',
     notLoggedIn: 'Nicht angemeldet',
-    dark: 'Dunkel',
-    light: 'Hell',
+    themeSystem: 'System',
+    themeLight: 'Hell',
+    themeDark: 'Dunkel',
   },
   login: {
     title: 'Anmelden',

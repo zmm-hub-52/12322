@@ -3,6 +3,7 @@ import { TabManager, type OpenTabInput, type TabMeta } from '@platform/tab-manag
 import type { Router } from 'vue-router';
 import { useUserStore } from '../stores/user';
 import { useThemeStore } from '../stores/theme';
+import { toast, showMessage } from '@siemens/ix';
 
 /**
  * useTabs：把 TabManager（纯 TS）绑定到 Vue 响应式，并负责容器 DOM 的挂载调度。
@@ -30,6 +31,9 @@ export function useTabs(router: Router) {
       getTheme: () => themeStore.mode,
       // 跨应用跳转：子应用通过 window.$wujie.props.jump 跳主应用其他菜单
       jump: (path: string) => router.push(path),
+      // 全局反馈：子应用调用后由主应用统一弹（覆盖全屏，不被 iframe 边界裁剪）
+      showToast: toast,
+      showMessage,
     }),
     onLoadError: (tab, error) => {
       // 兜底入口：真实场景这里显示骨架屏/失败重试/兜底页，禁止白屏
