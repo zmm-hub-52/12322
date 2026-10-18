@@ -1,0 +1,29 @@
+{
+  "name": "@platform/approval-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "审批中心子应用（无界子应用 · Vue 3）",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/sdk": "workspace:*",
+    "@platform/ui-components": "workspace:*",
+    "@platform/ui-theme": "workspace:*",
+    "@siemens/ix": "5.2.1",
+    "@siemens/ix-icons": "^3.7.0",
+    "@siemens/ix-vue": "5.2.1",
+    "vue": "^3.5.43",
+    "vue-i18n": "^11.4.14",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "~5.7.3",
+    "vite": "^7.0.0",
+    "vue-tsc": "^2.2.0"
+  }
+}

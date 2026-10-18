@@ -1,0 +1,15 @@
+{
+  "name": "@platform/tab-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "多 Tab 管理：保活 + 10 分钟超时销毁 + 引用计数 + sessionStorage 持久化",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "wujie": "^2.1.0"
+  }
+}

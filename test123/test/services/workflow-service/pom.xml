@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.8</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.platform</groupId>
+  <artifactId>workflow-service</artifactId>
+  <version>0.1.0</version>
+  <name>workflow-service</name>
+  <description>工作流 + 动态数据表单微服务（流程配置 / 动态表单 / 审批流转）</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <mybatis-plus.version>3.5.15</mybatis-plus.version>
+    <flowable.version>8.0.0</flowable.version>
+    <mapstruct.version>1.6.3</mapstruct.version>
+    <lombok.version>1.18.38</lombok.version>
+    <mssql-jdbc.version>12.8.1.jre11</mssql-jdbc.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Spring Cloud 2025.1（Nacos 等组件版本管理；第一版核心功能未实际启用） -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>2025.1.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Web MVC -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- JSON（Spring Boot 4 的 starter-web 不再默认携带 Jackson，需显式引入） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-json</artifactId>
+    </dependency>
+
+    <!-- 参数校验（@Valid / @NotBlank 等） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- MyBatis-Plus（Spring Boot 4 专用 starter） -->
+    <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+      <version>${mybatis-plus.version}</version>
+    </dependency>
+
+    <!-- SQL Server 驱动 -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <version>${mssql-jdbc.version}</version>
+    </dependency>
+
+    <!-- Flowable 8 流程引擎（BPMN 流程定义与任务流转） -->
+    <dependency>
+      <groupId>org.flowable</groupId>
+      <artifactId>flowable-spring-boot-starter-process</artifactId>
+      <version>${flowable.version}</version>
+    </dependency>
+
+    <!-- EasyExcel：发起流程 Excel 导入（动态表头：start 节点字段作为列） -->
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>easyexcel</artifactId>
+      <version>4.0.3</version>
+    </dependency>
+
+    <!-- MapStruct 对象映射 -->
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+      <version>${mapstruct.version}</version>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>${lombok.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <!-- Lombok 注解处理器（必须在 MapStruct 之前） -->
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+            <!-- MapStruct 注解处理器 -->
+            <path>
+              <groupId>org.mapstruct</groupId>
+              <artifactId>mapstruct-processor</artifactId>
+              <version>${mapstruct.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

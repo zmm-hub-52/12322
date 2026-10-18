@@ -1,0 +1,4 @@
+# pnpm 工作区配置：apps 下放主应用与子应用，packages 下放公共包
+packages:
+  - "apps/*"
+  - "packages/*"

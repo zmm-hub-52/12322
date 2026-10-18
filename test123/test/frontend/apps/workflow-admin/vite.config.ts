@@ -1,0 +1,33 @@
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+
+/**
+ * workflow-admin 子应用 Vite 配置
+ * 说明：
+ * 1. 作为无界子应用被主应用加载，主应用通过 fetch 拉取本子应用的 index.html 与资源，
+ *    因此开发服务器必须开启 CORS。
+ * 2. 端口 5176（主应用 5173 / approval-ui 5174），避免冲突。
+ */
+export default defineConfig({
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          // iX 的 <ix-*> 是 Web Components，告诉 Vue 编译器不要把它们当普通组件解析
+          isCustomElement: (tag) => tag.startsWith('ix-'),
+        },
+      },
+    }),
+  ],
+  // 每次启动强制重新预构建依赖：彻底避免旧缓存导致的组件渲染异常（按钮丢失等问题）
+  optimizeDeps: {
+    force: true,
+  },
+  server: {
+    port: 5176,
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+  },
+});

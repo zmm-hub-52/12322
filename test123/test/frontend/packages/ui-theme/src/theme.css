@@ -1,0 +1,78 @@
+/* ============================================================
+ * @platform/ui-theme —— 品牌主题（单一主题源）
+ *
+ * 详细说明见同目录 README.md。
+ *
+ * 核心机制：
+ * 1. 引入西门子 iX 完整样式（组件 + classic 主题 light/dark 两套 token
+ *    + 原生 HTML 基础样式 + .typography-* 与 .ix-table 等工具类）
+ * 2. 主题切换靠 <html> 上的 data-ix-theme="classic" + data-ix-color-schema="light|dark|system"
+ *    （由本包 index.ts 里的 applyThemeVariant 通过官方 themeSwitcher 设置）
+ * 3. 下方 --brand-* 是平台语义别名，映射到 iX 的 --theme-* token；
+ *    业务也可直接用 --theme-*。别名只是便捷入口，不是二次封装。
+ *
+ * 注意：无界 iframe 隔离下主应用变量不穿透到子应用，每个应用各自引入本文件。
+ * ============================================================ */
+
+@import '@siemens/ix/dist/siemens-ix/siemens-ix.css';
+@import './fonts.css';
+
+/* 平台语义别名（映射 iX token）。
+ * 必须用「纯属性选择器」而非 :root —— 在无界 shadow DOM 里，
+ * :root 匹配的是 shadow host（<wujie-app>），匹配不到子应用的 <html>。 */
+[data-ix-theme='classic'] {
+  color-scheme: light;
+
+  /* ---------- 1. 颜色 ---------- */
+  --brand-primary: var(--theme-color-primary);
+  --brand-primary-hover: var(--theme-color-primary--hover);
+  --brand-primary-contrast: var(--theme-color-primary--contrast);
+  --brand-text: var(--theme-color-std-text);
+  --brand-text-secondary: var(--theme-color-soft-text);
+  --brand-text-disabled: var(--theme-color-weak-text);
+  --brand-border: var(--theme-color-soft-bdr);
+  --brand-border-strong: var(--theme-color-std-bdr);
+  --brand-success: var(--theme-color-success);
+  --brand-warning: var(--theme-color-warning);
+  --brand-danger: var(--theme-color-alarm);
+
+  /* ---------- 2. 间距（iX modular scale，rem 阶梯） ---------- */
+  --brand-space-1: var(--theme-ms--2); /* 10px */
+  --brand-space-2: var(--theme-ms--1); /* 12px */
+  --brand-space-3: var(--theme-ms-0); /* 14px */
+  --brand-space-4: var(--theme-ms-1); /* 16px */
+  --brand-space-5: var(--theme-ms-2); /* 20px */
+  --brand-space-6: var(--theme-ms-3); /* 24px */
+  --brand-space-7: var(--theme-ms-4); /* 29px */
+  --brand-space-8: var(--theme-ms-5); /* 35px */
+
+  /* ---------- 3. 字号 ---------- */
+  --brand-font-xs: var(--theme-font-size-xs); /* 10px */
+  --brand-font-sm: var(--theme-font-size-s); /* 12px */
+  --brand-font-md: var(--theme-font-size-default); /* 14px */
+  --brand-font-lg: var(--theme-font-size-l); /* 16px */
+  --brand-font-xl: var(--theme-font-size-xl); /* 22px */
+
+  /* ---------- 4. 阴影（映射 iX shadow token） ---------- */
+  --brand-shadow: var(--theme-shadow-1);
+  --brand-shadow-md: var(--theme-shadow-3);
+  --brand-shadow-lg: var(--theme-shadow-4);
+
+  /* ---------- 5. 圆角（iX 无 radius token，平台定义） ---------- */
+  --brand-radius-sm: 2px;
+  --brand-radius: 4px;
+  --brand-radius-lg: 8px;
+
+  /* ---------- 6. 页面背景（iX 无 solid 背景 token，平台补充） ---------- */
+  --brand-bg: #ffffff;
+  --brand-bg-secondary: #f5f7f9;
+  --brand-bg-tertiary: #eef1f4;
+}
+
+/* 深色主题下，仅需覆盖 iX 没有的 solid 背景（其余 token 已随 color-schema 自动切换） */
+[data-ix-theme='classic'][data-ix-color-schema='dark'] {
+  color-scheme: dark;
+  --brand-bg: #17191c;
+  --brand-bg-secondary: #1f2328;
+  --brand-bg-tertiary: #2a2f36;
+}
