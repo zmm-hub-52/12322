@@ -50,6 +50,8 @@ interface ApiProcessDef {
   status: string; // draft / published / disabled
   description: string | null;
   deploymentId: string | null;
+  updateTime: string | null;
+  publishedTime: string | null;
   enabled: boolean;
 }
 
@@ -60,6 +62,8 @@ interface ApiProcessNode {
   nodeName: string;
   nodeType: string;
   rejectStrategy: string | null;
+  assigneeMode: string | null;
+  fixedAssignee: string | null;
   enabled: boolean;
 }
 
@@ -82,9 +86,9 @@ interface ApiFieldDef {
   categoryId: number | null;
   fieldKey: string;
   fieldName: string;
+  description: string | null;
   fieldType: string;
-  valueRule: string | null;
-  validation: string | null;
+  fieldRule: string | null;
   required: boolean;
   sortNo: number;
   enabled: boolean;
@@ -137,6 +141,8 @@ function adaptProcessDef(a: ApiProcessDef): ProcessDef {
     initiator: 'buyer',
     version: a.version,
     published: a.status === 'published',
+    updateTime: a.updateTime ?? undefined,
+    publishedTime: a.publishedTime ?? undefined,
     nodes: [],
     links: [],
   };
@@ -150,6 +156,8 @@ function adaptNode(a: ApiProcessNode): ProcessNode {
     nodeName: a.nodeName,
     nodeType: a.nodeType as ProcessNode['nodeType'],
     rejectStrategy: (a.rejectStrategy ?? 'back_prev') as ProcessNode['rejectStrategy'],
+    assigneeMode: (a.assigneeMode ?? 'dynamic') as ProcessNode['assigneeMode'],
+    fixedAssignee: a.fixedAssignee ?? undefined,
   };
 }
 
@@ -171,20 +179,17 @@ function adaptLink(a: ApiLinkDto): ProcessLink {
   };
 }
 
-/** 后端字段 → 前端 FieldDef（required 合并进 validation） */
+/** 后端字段 → 前端 FieldDef（rule 为取值+校验二合一） */
 function adaptFieldDef(a: ApiFieldDef): FieldDef {
-  const validation = parseJson<{ required?: boolean; minLength?: number; maxLength?: number; pattern?: string }>(
-    a.validation,
-  );
   return {
     id: a.id,
     categoryId: a.categoryId ?? undefined,
     fieldKey: a.fieldKey,
     fieldName: a.fieldName,
+    description: a.description ?? undefined,
     fieldType: a.fieldType as FieldDef['fieldType'],
-    valueRule: parseJson(a.valueRule),
-    validation:
-      a.required && !validation?.required ? { ...(validation ?? {}), required: true } : validation,
+    required: a.required,
+    rule: parseJson(a.fieldRule),
     enabled: a.enabled,
   };
 }
@@ -219,6 +224,8 @@ export async function apiSaveGraph(
         nodeName: n.nodeName,
         nodeType: n.nodeType,
         rejectStrategy: n.rejectStrategy ?? 'back_prev',
+        assigneeMode: n.assigneeMode ?? 'dynamic',
+        fixedAssignee: n.fixedAssignee ?? null,
       })),
       links: links.map((l) => ({
         fromKey: l.fromKey,
@@ -277,6 +284,22 @@ export async function apiPublish(id: number): Promise<number> {
   return def.version;
 }
 
+// ==================== 用户 ====================
+
+interface ApiUser {
+  id: number;
+  username: string;
+  name: string;
+  roleCode: string | null;
+  roleName: string | null;
+}
+
+/** 用户列表（固定处理人选择） */
+export async function apiListUsers(): Promise<{ username: string; name: string }[]> {
+  const list = await unwrap<ApiUser[]>(http.get('/api/auth/users'));
+  return (list ?? []).map((u) => ({ username: u.username, name: u.name }));
+}
+
 // ==================== 字段库 ====================
 
 /** 某分类下的字段列表（维表第三层） */
@@ -316,20 +339,20 @@ export async function apiCreateField(
   input: {
     fieldKey: string;
     fieldName: string;
+    description?: string;
     fieldType: string;
     required: boolean;
-    valueRule?: unknown;
-    validation?: unknown;
+    rule?: unknown;
   },
 ): Promise<void> {
   await unwrap<unknown>(
     http.post(`/api/dimension/category/${categoryId}/field`, {
       fieldKey: input.fieldKey,
       fieldName: input.fieldName,
+      description: input.description ?? null,
       fieldType: input.fieldType,
       required: input.required,
-      valueRule: input.valueRule ? JSON.stringify(input.valueRule) : null,
-      validation: input.validation ? JSON.stringify(input.validation) : null,
+      fieldRule: input.rule ? JSON.stringify(input.rule) : null,
     }),
   );
   clearAllFieldsCache();
@@ -338,15 +361,15 @@ export async function apiCreateField(
 /** 更新字段（fieldKey 不可改） */
 export async function apiUpdateField(
   id: number,
-  input: { fieldName: string; fieldType: string; required: boolean; valueRule?: unknown; validation?: unknown },
+  input: { fieldName: string; description?: string; fieldType: string; required: boolean; rule?: unknown },
 ): Promise<void> {
   await unwrap<unknown>(
     http.put(`/api/field/${id}`, {
       fieldName: input.fieldName,
+      description: input.description ?? null,
       fieldType: input.fieldType,
       required: input.required,
-      valueRule: input.valueRule ? JSON.stringify(input.valueRule) : null,
-      validation: input.validation ? JSON.stringify(input.validation) : null,
+      fieldRule: input.rule ? JSON.stringify(input.rule) : null,
     }),
   );
   clearAllFieldsCache();
@@ -372,16 +395,15 @@ export async function apiListNodeFields(defId: number, nodeKey: string): Promise
 
   return (raws ?? []).map((r) => {
     const def = libByKey.get(r.fieldKey);
-    const override = parseJson<{ required?: boolean; valueRule?: unknown; validation?: unknown }>(r.override);
+    const override = parseJson<{ required?: boolean; rule?: unknown }>(r.override);
     return {
       id: r.id,
       fieldKey: r.fieldKey,
       fieldName: def?.fieldName ?? r.fieldKey,
       fieldType: def?.fieldType ?? 'input',
       mode: (r.mode ?? 'editable') as NodeFormField['mode'],
-      required: override?.required ?? def?.validation?.required ?? false,
-      valueRule: (override?.valueRule as NodeFormField['valueRule']) ?? def?.valueRule,
-      validation: (override?.validation as NodeFormField['validation']) ?? def?.validation,
+      required: override?.required ?? def?.required ?? false,
+      rule: (override?.rule as NodeFormField['rule']) ?? def?.rule,
       placeholder: def?.placeholder,
       sortNo: r.orderNo ?? 0,
     };
@@ -404,8 +426,7 @@ export async function apiSaveNodeFields(
   for (const f of fields) {
     const override = JSON.stringify({
       required: f.required,
-      valueRule: f.valueRule,
-      validation: f.validation,
+      rule: f.rule,
     });
     const old = existingByKey.get(f.fieldKey);
     if (old) {

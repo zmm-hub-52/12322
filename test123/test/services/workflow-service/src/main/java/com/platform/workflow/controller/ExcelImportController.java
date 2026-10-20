@@ -82,8 +82,6 @@ public class ExcelImportController {
                 } catch (NumberFormatException ex) {
                     converted.put(e.getKey(), s);
                 }
-            } else if (v != null && "boolean".equals(type) && v instanceof String s) {
-                converted.put(e.getKey(), "true".equalsIgnoreCase(s) || "是".equals(s));
             } else {
                 converted.put(e.getKey(), v);
             }

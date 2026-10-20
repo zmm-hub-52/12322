@@ -24,6 +24,12 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('../views/detail/index.vue'),
     meta: { title: '办理' },
   },
+  {
+    path: '/approval/finished',
+    name: 'ApprovalFinished',
+    component: () => import('../views/finished/index.vue'),
+    meta: { title: '已完结流程' },
+  },
   // 兜底：未知路由回列表页
   { path: '/:pathMatch(.*)*', redirect: '/approval/list' },
 ];

@@ -78,11 +78,16 @@
         {{ t('wizard.nodeHint') }}
         <span class="hint__sub">{{ t('wizard.nodeDragHint') }}</span>
       </p>
+      <div v-if="showValidationError && nodeProblems.names.length" class="validate-banner">
+        <span class="validate-banner__title">{{ t('wizard.validateFailed') }}</span>
+        <span>{{ t('wizard.fixedAssigneeMissing', { names: nodeProblems.names.join('、') }) }}</span>
+      </div>
       <div class="editor-wrap">
         <FlowGraph
           :nodes="nodes"
           :links="links"
           :selected-key="selectedNodeKey"
+          :problem-keys="showValidationError ? nodeProblems.keys : []"
           :editable="true"
           @select="onSelectNode"
           @add-at="onAddAt"
@@ -176,12 +181,52 @@
             <IxInput v-model="popoverNode.nodeName" class="popover__rename" />
             <div class="popover__row">
               <label class="popover__label">{{ t('wizard.rejectStrategy') }}</label>
-              <IxSelect v-model="popoverNode.rejectStrategy" class="popover__select">
-                <IxSelectItem :label="t('wizard.rejectBackPrev')" value="back_prev" />
+              <template v-if="isInParallelBranch(popoverNode.nodeKey)">
+                <span class="popover__fixed">{{ t('wizard.rejectTerminate') }}</span>
+              </template>
+              <IxSelect v-else v-model="popoverNode.rejectStrategy" class="popover__select">
+                <IxSelectItem
+                  v-if="!isAfterParallelJoin(popoverNode.nodeKey)"
+                  :label="t('wizard.rejectBackPrev')"
+                  value="back_prev"
+                />
                 <IxSelectItem :label="t('wizard.rejectBackStarter')" value="back_starter" />
                 <IxSelectItem :label="t('wizard.rejectTerminate')" value="terminate" />
               </IxSelect>
             </div>
+            <p v-if="isInParallelBranch(popoverNode.nodeKey)" class="popover__hint">
+              {{ t('wizard.parallelRejectFixed') }}
+            </p>
+            <p v-else-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
+              {{ t('wizard.afterJoinRejectHint') }}
+            </p>
+            <div class="popover__row">
+              <label class="popover__label">{{ t('wizard.assigneeMode') }}</label>
+              <template v-if="isAfterParallelJoin(popoverNode.nodeKey)">
+                <span class="popover__fixed">{{ t('wizard.assigneeFixedMode') }}</span>
+              </template>
+              <IxSelect v-else v-model="popoverNode.assigneeMode" class="popover__select">
+                <IxSelectItem :label="t('wizard.assigneeDynamic')" value="dynamic" />
+                <IxSelectItem :label="t('wizard.assigneeFixedMode')" value="fixed" />
+              </IxSelect>
+            </div>
+            <p v-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
+              {{ t('wizard.afterJoinAssigneeFixed') }}
+            </p>
+            <div v-if="popoverNode.assigneeMode === 'fixed'" class="popover__row">
+              <label class="popover__label">{{ t('wizard.fixedAssignee') }}</label>
+              <IxSelect v-model="popoverNode.fixedAssignee" class="popover__select">
+                <IxSelectItem
+                  v-for="u in userOptions"
+                  :key="u.username"
+                  :label="`${u.name}（${u.username}）`"
+                  :value="u.username"
+                />
+              </IxSelect>
+            </div>
+            <p v-if="popoverNode.assigneeMode === 'fixed' && !popoverNode.fixedAssignee" class="popover__error">
+              {{ t('wizard.fixedAssigneeRequired') }}
+            </p>
             <div class="popover__actions">
               <IxButton variant="secondary" @click="moveNode(popoverNode.nodeKey, -1)">
                 {{ t('wizard.moveUp') }}
@@ -197,6 +242,33 @@
           <template v-else-if="popoverNode && popoverNode.nodeType === 'fill'">
             <div class="popover__title">{{ t('wizard.nodeSettings') }}</div>
             <IxInput v-model="popoverNode.nodeName" class="popover__rename" />
+            <div class="popover__row">
+              <label class="popover__label">{{ t('wizard.assigneeMode') }}</label>
+              <template v-if="isAfterParallelJoin(popoverNode.nodeKey)">
+                <span class="popover__fixed">{{ t('wizard.assigneeFixedMode') }}</span>
+              </template>
+              <IxSelect v-else v-model="popoverNode.assigneeMode" class="popover__select">
+                <IxSelectItem :label="t('wizard.assigneeDynamic')" value="dynamic" />
+                <IxSelectItem :label="t('wizard.assigneeFixedMode')" value="fixed" />
+              </IxSelect>
+            </div>
+            <p v-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
+              {{ t('wizard.afterJoinAssigneeFixed') }}
+            </p>
+            <div v-if="popoverNode.assigneeMode === 'fixed'" class="popover__row">
+              <label class="popover__label">{{ t('wizard.fixedAssignee') }}</label>
+              <IxSelect v-model="popoverNode.fixedAssignee" class="popover__select">
+                <IxSelectItem
+                  v-for="u in userOptions"
+                  :key="u.username"
+                  :label="`${u.name}（${u.username}）`"
+                  :value="u.username"
+                />
+              </IxSelect>
+            </div>
+            <p v-if="popoverNode.assigneeMode === 'fixed' && !popoverNode.fixedAssignee" class="popover__error">
+              {{ t('wizard.fixedAssigneeRequired') }}
+            </p>
             <div class="popover__actions">
               <IxButton variant="secondary" @click="moveNode(popoverNode.nodeKey, -1)">
                 {{ t('wizard.moveUp') }}
@@ -212,6 +284,13 @@
           <template v-else-if="popoverNode && isGateType(popoverNode.nodeType)">
             <div class="popover__title">{{ popoverNode.nodeName }}</div>
             <p class="popover__hint">{{ t('wizard.parallelGroupHint') }}</p>
+            <IxButton
+              v-if="isSplitType(popoverNode.nodeType)"
+              variant="secondary"
+              @click="openBranchEdit(popoverNode.nodeKey)"
+            >
+              {{ t('wizard.editBranch') }}
+            </IxButton>
             <IxButton variant="secondary" @click="removeGatewayGroup(popoverNode.nodeKey)">
               {{ t('wizard.deleteParallel') }}
             </IxButton>
@@ -284,6 +363,14 @@
             <IxSelectItem label="4" value="4" />
           </IxSelect>
         </div>
+        <!-- 每支线节点类型：填写 / 审批 -->
+        <div v-for="(bt, i) in parallelModal.branchTypes" :key="i" class="modal__row">
+          <label class="modal__label">{{ t('wizard.branchType', { n: i + 1 }) }}</label>
+          <IxSelect v-model="parallelModal.branchTypes[i]" class="modal__select">
+            <IxSelectItem :label="t('wizard.nodeTypeFill')" value="fill" />
+            <IxSelectItem :label="t('wizard.nodeTypeApproval')" value="approval" />
+          </IxSelect>
+        </div>
         <div class="modal__foot">
           <IxButton variant="secondary" @click="closeParallelModal">{{ t('common.cancel') }}</IxButton>
           <IxButton variant="primary" @click="confirmParallel">{{ t('common.ok') }}</IxButton>
@@ -311,7 +398,7 @@ import { useI18n } from 'vue-i18n';
 import { IxButton, IxInput, IxSelect, IxSelectItem } from '@platform/ui-components';
 import FlowGraph from '../../components/FlowGraph.vue';
 import { useDraftStore } from '../../stores/draft';
-import { fetchAllFields, fetchTemplates } from '../../mock/service';
+import { fetchAllFields, fetchTemplates, fetchUsers } from '../../mock/service';
 import { toastMsg } from '../../utils/feedback';
 import type { FieldDef, NodeType, ProcessLink, ProcessNode, ProcessTemplate } from '../../types/schema';
 
@@ -335,6 +422,8 @@ const templates = ref<ProcessTemplate[]>([]);
 const publishing = ref(false);
 
 const selectedTemplateKey = ref('');
+/** 当前已套用的模板 key（重新选不同模板时重新套用） */
+const appliedTemplateKey = ref('');
 
 // ---- 画布 UI 状态（本地；图数据在 store） ----
 const selectedNodeKey = ref<string | null>(null);
@@ -346,20 +435,30 @@ type PopoverState =
 
 const popover = ref<PopoverState | null>(null);
 
-/** 并行分支配置弹层 */
-const parallelModal = ref<{ fromKey: string; toKey: string; branchCount: string } | null>(null);
+/** 并行分支配置弹层（每支线可选填写/审批；editingKey 非空表示编辑现有分叉组） */
+const parallelModal = ref<{
+  fromKey: string;
+  toKey: string;
+  branchCount: string;
+  branchTypes: ('fill' | 'approval')[];
+  editingKey?: string;
+} | null>(null);
 
-/** 排他分支配置弹层（含每支条件编辑器） */
+/** 排他分支配置弹层（含每支条件编辑器；editingKey 非空表示编辑现有分叉组） */
 const exclusiveModal = ref<{
   fromKey: string;
   toKey: string;
   branchCount: string;
   conditions: { fieldKey: string; operator: string; value: string }[];
   defaultBranch: string;
+  editingKey?: string;
 } | null>(null);
 
 /** 条件编辑器字段选项（来自字段库） */
 const fieldOptions = ref<FieldDef[]>([]);
+
+/** 用户选项（固定处理人选择） */
+const userOptions = ref<{ username: string; name: string }[]>([]);
 
 /** 分支数变化时调整条件行数量 */
 watch(
@@ -374,11 +473,23 @@ watch(
   },
 );
 
+/** 并行分支数变化时调整每支线类型数组长度 */
+watch(
+  () => parallelModal.value?.branchCount,
+  (n) => {
+    const m = parallelModal.value;
+    if (!m || !n) return;
+    const count = Number(n) || 2;
+    while (m.branchTypes.length < count) m.branchTypes.push('approval');
+    if (m.branchTypes.length > count) m.branchTypes.length = count;
+  },
+);
+
 /** 节点表单配置完成度（派生自 store.nodeFields）：nodeKey -> 已配置字段数 */
 const formCounts = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {};
   for (const n of nodes.value) {
-    if (n.nodeType === 'fill' || n.nodeType === 'approval') {
+    if (n.nodeType === 'start' || n.nodeType === 'fill' || n.nodeType === 'approval') {
       counts[n.nodeKey] = (store.nodeFields[n.nodeKey] ?? []).length;
     }
   }
@@ -391,6 +502,7 @@ let linkSeq = 0;
 onMounted(async () => {
   templates.value = await fetchTemplates();
   fieldOptions.value = await fetchAllFields();
+  userOptions.value = await fetchUsers();
   if (isEdit && defId) {
     // 编辑模式：从后端加载草稿（图 + 各节点字段）
     await store.loadFromServer(defId);
@@ -406,9 +518,9 @@ const popoverNode = computed(() => {
   return p && p.kind === 'node' ? nodes.value.find((n) => n.nodeKey === p.key) : undefined;
 });
 
-/** 可配置表单的节点（fill / approval） */
+/** 可配置表单的节点（start / fill / approval；网关/结束无需表单） */
 const configurableNodes = computed(() =>
-  nodes.value.filter((n) => n.nodeType === 'fill' || n.nodeType === 'approval'),
+  nodes.value.filter((n) => n.nodeType === 'start' || n.nodeType === 'fill' || n.nodeType === 'approval'),
 );
 
 /** 已配置字段的节点 key 集合（流程图角标用） */
@@ -422,6 +534,19 @@ const unconfiguredFills = computed(() =>
     .filter((n) => n.nodeType === 'fill' && (formCounts.value[n.nodeKey] ?? 0) === 0)
     .map((n) => n.nodeName),
 );
+
+/** 节点级校验问题（固定处理人未指定人员等），供第三步「下一步」与发布前校验复用 */
+function collectNodeProblems(): { keys: string[]; names: string[] } {
+  const bad = nodes.value.filter(
+    (n) => (n.nodeType === 'fill' || n.nodeType === 'approval') && n.assigneeMode === 'fixed' && !n.fixedAssignee,
+  );
+  return { keys: bad.map((n) => n.nodeKey), names: bad.map((n) => n.nodeName) };
+}
+
+const nodeProblems = computed(() => collectNodeProblems());
+
+/** 第三步点过「下一步」后显示校验横幅/高亮（修复后自动消失） */
+const showValidationError = ref(false);
 
 const nextVersion = computed(() => store.version + 1);
 const initiatorText = computed(() => {
@@ -450,18 +575,28 @@ function onPrev(): void {
 
 async function onNext(): Promise<void> {
   if (!canNext.value) return;
-  // 第 2 步 -> 第 3 步：按所选模板初始化节点与连线
-  if (step.value === 2 && nodes.value.length === 0) {
+  // 第 2 步 -> 第 3 步：按所选模板初始化节点与连线（重新选不同模板时重新套用）
+  if (step.value === 2) {
     const tp = templates.value.find((x) => x.key === selectedTemplateKey.value);
-    if (tp) {
+    if (tp && appliedTemplateKey.value !== tp.key) {
+      if (nodes.value.length > 0) {
+        toastMsg(t('wizard.templateReset'));
+      }
       nodeSeq = 0;
       linkSeq = 0;
       nodes.value = tp.nodes.map((n, i) => ({ ...n, id: i + 1 }));
       links.value = tp.links.map((l, i) => ({ ...l, id: i + 1 }));
+      store.nodeFields = {};
+      appliedTemplateKey.value = tp.key;
     }
   }
-  // 第 3 步 -> 第 4 步：不在此停留，直接跳表单配置页（第 4 步为跳板，可回看）
+  // 第 3 步 -> 第 4 步：先校验节点配置，未通过则卡在第三步并醒目提示
   if (step.value === 3) {
+    showValidationError.value = true;
+    if (nodeProblems.value.names.length) {
+      return;
+    }
+    showValidationError.value = false;
     const target = configurableNodes.value.find((n) => n.nodeType === 'fill') ?? configurableNodes.value[0];
     if (target) {
       goFormConfig(target);
@@ -484,6 +619,21 @@ function onSelectNode(key: string, event: MouseEvent): void {
   const node = nodes.value.find((n) => n.nodeKey === key);
   if (node?.nodeType === 'approval' && !node.rejectStrategy) {
     node.rejectStrategy = 'back_prev';
+  }
+  if (node && (node.nodeType === 'fill' || node.nodeType === 'approval') && !node.assigneeMode) {
+    node.assigneeMode = 'dynamic';
+  }
+  // 并行相关约束（与后端 publish 校验一致）
+  if (node) {
+    if (node.nodeType === 'approval' && isInParallelBranch(node.nodeKey)) {
+      node.rejectStrategy = 'terminate';
+    }
+    if (node.nodeType === 'approval' && isAfterParallelJoin(node.nodeKey) && node.rejectStrategy === 'back_prev') {
+      node.rejectStrategy = 'terminate';
+    }
+    if ((node.nodeType === 'fill' || node.nodeType === 'approval') && isAfterParallelJoin(node.nodeKey)) {
+      node.assigneeMode = 'fixed';
+    }
   }
   popover.value = { kind: 'node', key, x: event.clientX, y: event.clientY };
 }
@@ -508,6 +658,138 @@ function isGateType(type: NodeType): boolean {
     type === 'exclusiveSplit' ||
     type === 'exclusiveJoin'
   );
+}
+
+/** 分叉网关（可编辑分支的入口） */
+function isSplitType(type: NodeType): boolean {
+  return type === 'parallelSplit' || type === 'exclusiveSplit';
+}
+
+/** 解析分叉组：分叉 → 分支 → 汇合，返回前后节点与分支列表 */
+function gatewayGroupInfo(splitKey: string): { fromKey: string; toKey: string; branches: ProcessNode[] } | null {
+  const inLink = links.value.find((l) => l.toKey === splitKey);
+  if (!inLink) return null;
+  const branches = links.value
+    .filter((l) => l.fromKey === splitKey)
+    .map((l) => nodes.value.find((n) => n.nodeKey === l.toKey))
+    .filter((n): n is ProcessNode => !!n);
+  if (!branches.length) return null;
+  const joinKey = findJoin(splitKey);
+  if (!joinKey) return null;
+  const outLink = links.value.find((l) => l.fromKey === joinKey);
+  if (!outLink) return null;
+  return { fromKey: inLink.fromKey, toKey: outLink.toKey, branches };
+}
+
+/** BFS：从分叉出发找汇合网关 */
+function findJoin(splitKey: string): string {
+  const queue = [splitKey];
+  const visited = new Set<string>();
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    for (const l of links.value) {
+      if (l.fromKey !== cur) continue;
+      const next = nodes.value.find((n) => n.nodeKey === l.toKey);
+      if (!next) continue;
+      if (next.nodeType === 'parallelJoin' || next.nodeType === 'exclusiveJoin') {
+        return next.nodeKey;
+      }
+      queue.push(next.nodeKey);
+    }
+  }
+  return '';
+}
+
+/** 编辑分叉组：预填当前配置并打开对应弹层 */
+function openBranchEdit(splitKey: string): void {
+  const node = nodes.value.find((n) => n.nodeKey === splitKey);
+  if (!node) return;
+  const info = gatewayGroupInfo(splitKey);
+  if (!info) return;
+  closePopover();
+
+  if (node.nodeType === 'parallelSplit') {
+    parallelModal.value = {
+      fromKey: info.fromKey,
+      toKey: info.toKey,
+      branchCount: String(info.branches.length),
+      branchTypes: info.branches.map((b) => (b.nodeType === 'approval' ? 'approval' : 'fill')),
+      editingKey: splitKey,
+    };
+  } else if (node.nodeType === 'exclusiveSplit') {
+    const conds = links.value
+      .filter((l) => l.fromKey === splitKey)
+      .map((l) =>
+        l.condition
+          ? { fieldKey: l.condition.fieldKey ?? '', operator: l.condition.operator ?? 'eq', value: l.condition.value ?? '' }
+          : { fieldKey: '', operator: 'eq', value: '' },
+      );
+    const defaultIdx = links.value.filter((l) => l.fromKey === splitKey).findIndex((l) => l.condition?.isDefault);
+    exclusiveModal.value = {
+      fromKey: info.fromKey,
+      toKey: info.toKey,
+      branchCount: String(info.branches.length),
+      conditions: conds,
+      defaultBranch: String(defaultIdx >= 0 ? defaultIdx : Math.max(0, conds.length - 1)),
+      editingKey: splitKey,
+    };
+  }
+}
+
+/** 节点是否位于并行分支内（反向回溯遇 parallelSplit）——并行分支驳回策略固定为终止 */
+function isInParallelBranch(nodeKey: string): boolean {
+  const byKey = new Map(nodes.value.map((n) => [n.nodeKey, n] as const));
+  const inLinks = new Map<string, string[]>();
+  for (const l of links.value) {
+    const arr = inLinks.get(l.toKey) ?? [];
+    arr.push(l.fromKey);
+    inLinks.set(l.toKey, arr);
+  }
+  let cur: string | undefined = nodeKey;
+  const visited = new Set<string>();
+  while (cur && !visited.has(cur)) {
+    visited.add(cur);
+    const ins = inLinks.get(cur) ?? [];
+    if (ins.length !== 1) return false;
+    const prev = byKey.get(ins[0]);
+    if (!prev) return false;
+    if (prev.nodeType === 'parallelSplit') return true;
+    if (prev.nodeType === 'start') return false;
+    cur = prev.nodeKey; // fill/approval/网关继续回溯（跨过 userTask，覆盖分支内所有用户任务）
+  }
+  return false;
+}
+
+/** 节点是否为「并行汇合后的第一个用户任务」（反向只跨网关，先遇 parallelJoin 则 true） */
+function isAfterParallelJoin(nodeKey: string): boolean {
+  const byKey = new Map(nodes.value.map((n) => [n.nodeKey, n] as const));
+  const inLinks = new Map<string, string[]>();
+  for (const l of links.value) {
+    const arr = inLinks.get(l.toKey) ?? [];
+    arr.push(l.fromKey);
+    inLinks.set(l.toKey, arr);
+  }
+  let cur: string | undefined = nodeKey;
+  const visited = new Set<string>();
+  while (cur && !visited.has(cur)) {
+    visited.add(cur);
+    const ins = inLinks.get(cur) ?? [];
+    if (ins.length !== 1) return false;
+    const prev = byKey.get(ins[0]);
+    if (!prev) return false;
+    if (prev.nodeType === 'parallelJoin') return true;
+    if (
+      prev.nodeType === 'parallelSplit' ||
+      prev.nodeType === 'fill' ||
+      prev.nodeType === 'approval' ||
+      prev.nodeType === 'start'
+    )
+      return false;
+    cur = prev.nodeKey; // 其它网关继续
+  }
+  return false;
 }
 
 /** 条件字段类型（决定比较符选项） */
@@ -580,7 +862,7 @@ function addNodeBetween(fromKey: string, toKey: string, type: 'fill' | 'approval
 
 /** 打开并行分支配置弹层 */
 function openParallelModal(fromKey: string, toKey: string): void {
-  parallelModal.value = { fromKey, toKey, branchCount: '2' };
+  parallelModal.value = { fromKey, toKey, branchCount: '2', branchTypes: ['approval', 'approval'] };
   closePopover();
 }
 
@@ -589,13 +871,18 @@ function closeParallelModal(): void {
   parallelModal.value = null;
 }
 
-/** 生成并行结构：分叉 → N 条并行审批分支 → 汇合 */
+/** 生成并行结构：分叉 → N 条并行分支 → 汇合 */
 function confirmParallel(): void {
   const modal = parallelModal.value;
   parallelModal.value = null;
   if (!modal) return;
   const { fromKey, toKey } = modal;
   const branchCount = Number(modal.branchCount) || 2;
+
+  // 编辑模式：先删除旧分叉组（会桥接 fromKey→toKey）
+  if (modal.editingKey) {
+    removeGatewayGroup(modal.editingKey);
+  }
 
   const li = links.value.findIndex((l) => l.fromKey === fromKey && l.toKey === toKey);
   if (li < 0) return;
@@ -619,12 +906,14 @@ function confirmParallel(): void {
   links.value.push({ id: ++linkSeq, fromKey: join.nodeKey, toKey });
 
   for (let b = 1; b <= branchCount; b++) {
+    const branchType = modal.branchTypes[b - 1] ?? 'approval';
     nodeSeq += 1;
     const branchNode: ProcessNode = {
       id: -nodeSeq,
-      nodeKey: nextNodeKey('branch'),
-      nodeName: `并行审批 ${b}`,
-      nodeType: 'approval',
+      nodeKey: nextNodeKey(branchType),
+      nodeName: branchType === 'fill' ? `并行填写 ${b}` : `并行审批 ${b}`,
+      nodeType: branchType,
+      rejectStrategy: branchType === 'approval' ? 'terminate' : undefined,
     };
     links.value.push({ id: ++linkSeq, fromKey: split.nodeKey, toKey: branchNode.nodeKey });
     links.value.push({ id: ++linkSeq, fromKey: branchNode.nodeKey, toKey: join.nodeKey });
@@ -662,6 +951,11 @@ function confirmExclusive(): void {
   if (!modal) return;
   const { fromKey, toKey } = modal;
   const branchCount = Number(modal.branchCount) || 2;
+
+  // 编辑模式：先删除旧分叉组（会桥接 fromKey→toKey）
+  if (modal.editingKey) {
+    removeGatewayGroup(modal.editingKey);
+  }
 
   const li = links.value.findIndex((l) => l.fromKey === fromKey && l.toKey === toKey);
   if (li < 0) return;
@@ -884,6 +1178,11 @@ async function saveDraft(): Promise<void> {
 
 /** 发布：先落盘再发布（后端版本+1+快照+BPMN 部署） */
 async function publish(): Promise<void> {
+  const problems = collectNodeProblems();
+  if (problems.names.length) {
+    toastMsg(t('wizard.fixedAssigneeMissing', { names: problems.names.join('、') }));
+    return;
+  }
   publishing.value = true;
   try {
     const version = await store.publish();
@@ -1030,6 +1329,21 @@ function typeText(type: NodeType): string {
   margin-top: 4px;
   font-size: 12px;
   color: var(--brand-text-disabled);
+}
+.validate-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--brand-danger);
+  border-radius: var(--brand-radius);
+  background: color-mix(in srgb, var(--brand-danger) 8%, var(--brand-bg));
+  color: var(--brand-danger);
+  font-size: 13px;
+}
+.validate-banner__title {
+  font-weight: 600;
 }
 
 /* ---- 第 1 步 ---- */
@@ -1237,6 +1551,15 @@ function typeText(type: NodeType): string {
 .popover__hint {
   font-size: 12px;
   color: var(--brand-text-secondary);
+}
+.popover__fixed {
+  font-size: 13px;
+  color: var(--brand-warning);
+  font-weight: 600;
+}
+.popover__error {
+  font-size: 12px;
+  color: var(--brand-danger);
 }
 .popover__item {
   display: flex;

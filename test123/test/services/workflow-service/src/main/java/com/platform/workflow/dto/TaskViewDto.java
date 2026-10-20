@@ -2,7 +2,7 @@ package com.platform.workflow.dto;
 
 import lombok.Data;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 /** 待办任务视图（引擎任务 + 业务实例上下文） */
 @Data
@@ -29,6 +29,6 @@ public class TaskViewDto {
     /** 节点类型（fill/approval） */
     private String nodeType;
 
-    /** 任务创建时间 */
-    private Date createTime;
+    /** 任务创建时间（本地时间，与业务表 LocalDateTime 一致） */
+    private LocalDateTime createTime;
 }

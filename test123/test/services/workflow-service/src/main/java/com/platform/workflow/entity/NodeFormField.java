@@ -38,7 +38,7 @@ public class NodeFormField extends BaseEntity {
     private String mode;
 
     /**
-     * 节点级覆盖 JSON：{ "required": bool, "valueRule": {...}, "validation": {...} }
+     * 节点级覆盖 JSON：{ "required": bool, "rule": {...} }
      * 可空；空则全部继承字段库默认。用于「同字段不同流程约束不同」的场景。
      */
     private String override;

@@ -88,7 +88,7 @@
                   <td class="mono">{{ f.fieldKey }}</td>
                   <td>{{ f.fieldName }}</td>
                   <td><span class="tag tag--type">{{ typeText(f.fieldType) }}</span></td>
-                  <td>{{ f.validation?.required ? t('field.yes') : t('field.no') }}</td>
+                  <td>{{ f.required ? t('field.yes') : t('field.no') }}</td>
                   <td class="item-actions">
                     <a class="link" @click="openEdit(f)">{{ t('dimension.config') }}</a>
                     <a class="link" @click="onDeleteField(f)">{{ t('dimension.disabled') }}</a>
@@ -118,6 +118,10 @@
             <span class="modal__label">{{ t('dimension.colName') }}</span>
             <IxInput v-model="form.fieldName" :placeholder="t('dimension.namePh')" />
           </label>
+          <label class="modal__field modal__field--wide">
+            <span class="modal__label">{{ t('dimension.colDesc') }}</span>
+            <IxInput v-model="form.description" :placeholder="t('dimension.descPh')" />
+          </label>
           <label class="modal__field">
             <span class="modal__label">{{ t('dimension.colType') }}</span>
             <IxSelect v-model="form.fieldType">
@@ -126,20 +130,16 @@
               <IxSelectItem :label="t('field.typeNumber')" value="number" />
               <IxSelectItem :label="t('field.typeSelect')" value="select" />
               <IxSelectItem :label="t('field.typeDate')" value="date" />
-              <IxSelectItem :label="t('field.typeBoolean')" value="boolean" />
             </IxSelect>
           </label>
           <label class="modal__field">
             <span class="modal__label">{{ t('dimension.colRequired') }}</span>
-            <IxToggle v-model="form.required" />
+            <IxToggle :checked="form.required" @checked-change="form.required = $event.detail" />
           </label>
         </div>
 
         <div class="modal__block">
-          <ValueRuleEditor v-model="form.valueRule" />
-        </div>
-        <div class="modal__block">
-          <ValidationEditor v-model="form.validation" />
+          <RuleEditor v-model="form.rule" />
         </div>
 
         <div class="modal__foot">
@@ -160,8 +160,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { IxButton, IxInput, IxSelect, IxSelectItem, IxToggle } from '@platform/ui-components';
-import ValueRuleEditor from '../../components/ValueRuleEditor.vue';
-import ValidationEditor from '../../components/ValidationEditor.vue';
+import RuleEditor from '../../components/RuleEditor.vue';
 import {
   createCategory,
   createDimension,
@@ -193,17 +192,17 @@ const modal = ref<{ editingId: number | null } | null>(null);
 const form = reactive<{
   fieldKey: string;
   fieldName: string;
+  description: string;
   fieldType: FieldDef['fieldType'];
   required: boolean;
-  valueRule?: FieldDef['valueRule'];
-  validation?: FieldDef['validation'];
+  rule?: FieldDef['rule'];
 }>({
   fieldKey: '',
   fieldName: '',
+  description: '',
   fieldType: 'input',
   required: false,
-  valueRule: undefined,
-  validation: undefined,
+  rule: undefined,
 });
 
 onMounted(async () => {
@@ -272,20 +271,20 @@ const canSave = computed(() => {
 function openCreate(): void {
   form.fieldKey = '';
   form.fieldName = '';
+  form.description = '';
   form.fieldType = 'input';
   form.required = false;
-  form.valueRule = undefined;
-  form.validation = undefined;
+  form.rule = undefined;
   modal.value = { editingId: null };
 }
 
 function openEdit(f: FieldDef): void {
   form.fieldKey = f.fieldKey;
   form.fieldName = f.fieldName;
+  form.description = f.description ?? '';
   form.fieldType = f.fieldType;
-  form.required = f.validation?.required ?? false;
-  form.valueRule = f.valueRule;
-  form.validation = f.validation;
+  form.required = f.required;
+  form.rule = f.rule;
   modal.value = { editingId: f.id };
 }
 
@@ -294,19 +293,19 @@ async function onSave(): Promise<void> {
     if (modal.value?.editingId) {
       await updateField(modal.value.editingId, {
         fieldName: form.fieldName.trim(),
+        description: form.description.trim(),
         fieldType: form.fieldType,
         required: form.required,
-        valueRule: form.valueRule,
-        validation: form.validation,
+        rule: form.rule,
       });
     } else if (selectedCategoryId.value) {
       await createField(selectedCategoryId.value, {
         fieldKey: form.fieldKey.trim(),
         fieldName: form.fieldName.trim(),
+        description: form.description.trim(),
         fieldType: form.fieldType,
         required: form.required,
-        valueRule: form.valueRule,
-        validation: form.validation,
+        rule: form.rule,
       });
     }
     modal.value = null;
@@ -335,7 +334,6 @@ function typeText(type: FieldDef['fieldType']): string {
     number: 'field.typeNumber',
     select: 'field.typeSelect',
     date: 'field.typeDate',
-    boolean: 'field.typeBoolean',
   };
   return t(map[type] ?? 'field.typeInput');
 }
@@ -508,6 +506,9 @@ function typeText(type: FieldDef['fieldType']): string {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.modal__field--wide {
+  grid-column: 1 / -1;
 }
 .modal__label {
   font-size: 13px;

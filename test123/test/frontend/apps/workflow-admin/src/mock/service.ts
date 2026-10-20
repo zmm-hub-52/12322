@@ -39,6 +39,11 @@ export async function fetchTemplates(): Promise<ProcessTemplate[]> {
   return MOCK_TEMPLATES;
 }
 
+/** 用户列表（固定处理人选择） */
+export async function fetchUsers(): Promise<{ username: string; name: string }[]> {
+  return api.apiListUsers();
+}
+
 /** 保存流程草稿：新建（拿 id）或更新基本信息 + 保存整图 + 同步 draft 字段配置 */
 export async function saveProcessDraft(def: ProcessDef): Promise<{ ok: true; id: number }> {
   let defId = def.id;
@@ -103,10 +108,10 @@ export async function createField(
   input: {
     fieldKey: string;
     fieldName: string;
+    description?: string;
     fieldType: FieldDef['fieldType'];
     required: boolean;
-    valueRule?: FieldDef['valueRule'];
-    validation?: FieldDef['validation'];
+    rule?: FieldDef['rule'];
   },
 ): Promise<void> {
   await api.apiCreateField(categoryId, input);
@@ -117,10 +122,10 @@ export async function updateField(
   id: number,
   input: {
     fieldName: string;
+    description?: string;
     fieldType: FieldDef['fieldType'];
     required: boolean;
-    valueRule?: FieldDef['valueRule'];
-    validation?: FieldDef['validation'];
+    rule?: FieldDef['rule'];
   },
 ): Promise<void> {
   await api.apiUpdateField(id, input);

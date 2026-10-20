@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -246,6 +247,12 @@ public class ProcessConfigService {
     public ProcessDef publish(Long defId) {
         ProcessDef def = getDef(defId);
 
+        // 幂等：已发布且无新改动（update_time <= published_time）时拒绝重复发布
+        if ("published".equals(def.getStatus()) && def.getPublishedTime() != null
+                && def.getUpdateTime() != null && !def.getUpdateTime().isAfter(def.getPublishedTime())) {
+            throw new BizException("无未发布改动，无需重复发布");
+        }
+
         List<ProcessNode> nodes = nodeMapper.selectList(
                 new LambdaQueryWrapper<ProcessNode>()
                         .eq(ProcessNode::getProcessDefId, defId)
@@ -266,17 +273,21 @@ public class ProcessConfigService {
 
         int newVersion = "published".equals(def.getStatus()) ? def.getVersion() + 1 : def.getVersion();
 
-        // 快照
+        List<ProcessLink> links = linkMapper.selectList(
+                new LambdaQueryWrapper<ProcessLink>().eq(ProcessLink::getProcessDefId, defId));
+
+        // 快照：表单 schema + 可执行图（节点/连线/处理人元数据），运行期只读
         String schema = schemaAssembler.assembleFullSchema(defId);
+        String graphJson = buildGraphJson(nodes, links);
         FormSchemaSnapshot snapshot = new FormSchemaSnapshot();
         snapshot.setProcessDefId(defId);
         snapshot.setProcessDefVersion(newVersion);
         snapshot.setSnapshotJson(schema);
+        snapshot.setGraphJson(graphJson);
         snapshotMapper.insert(snapshot);
 
         // BPMN 编译 + 部署
-        List<ProcessLink> links = linkMapper.selectList(
-                new LambdaQueryWrapper<ProcessLink>().eq(ProcessLink::getProcessDefId, defId));
+        bpmnGenerator.validateParallelRules(nodes, links);
         String bpmnXml = bpmnGenerator.generate(def, nodes, links);
         // 注入版本注释（XML 声明之后）：确保每次发布资源内容不同，绕过 Flowable 部署重复过滤
         bpmnXml = bpmnXml.replace("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
@@ -287,10 +298,13 @@ public class ProcessConfigService {
                 .addString(def.getCode() + ".bpmn20.xml", bpmnXml)
                 .deploy();
 
-        // 更新流程定义
+        // 更新流程定义（published_time 与 update_time 取同一时刻，确保刚发布时无「待发布」徽标）
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         def.setVersion(newVersion);
         def.setStatus("published");
         def.setDeploymentId(deployment.getId());
+        def.setPublishedTime(now);
+        def.setUpdateTime(now);
         defMapper.updateById(def);
 
         log.info("[publish] 流程 {} v{} 已发布：快照 id={}，部署 id={}", def.getCode(), newVersion, snapshot.getId(), deployment.getId());
@@ -317,6 +331,42 @@ public class ProcessConfigService {
         } catch (Exception e) {
             throw new BizException("快照解析失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 把「节点 + 连线」编译成可执行图快照 JSON。
+     * 节点携带运行期所需元数据（处理人模式/固定处理人），连线用 nodeKey 表达。
+     * 结构：{ nodes: [{key,name,type,assigneeMode,fixedAssignee}], links: [{fromKey,toKey,sortNo}] }
+     */
+    private String buildGraphJson(List<ProcessNode> nodes, List<ProcessLink> links) {
+        Map<Long, String> idToKey = nodes.stream()
+                .filter(n -> n.getId() != null)
+                .collect(Collectors.toMap(ProcessNode::getId, ProcessNode::getNodeKey, (a, b) -> a));
+
+        List<Map<String, Object>> nodeList = new ArrayList<>();
+        for (ProcessNode n : nodes) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("key", n.getNodeKey());
+            m.put("name", n.getNodeName());
+            m.put("type", n.getNodeType());
+            m.put("assigneeMode", n.getAssigneeMode());
+            m.put("fixedAssignee", n.getFixedAssignee());
+            nodeList.add(m);
+        }
+
+        List<Map<String, Object>> linkList = new ArrayList<>();
+        for (ProcessLink l : links) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("fromKey", idToKey.get(l.getFromNodeId()));
+            m.put("toKey", idToKey.get(l.getToNodeId()));
+            m.put("sortNo", l.getSortNo());
+            linkList.add(m);
+        }
+
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("nodes", nodeList);
+        root.put("links", linkList);
+        return toJson(root);
     }
 
     // ------------------------------------------------------------------

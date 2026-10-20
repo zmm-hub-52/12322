@@ -16,8 +16,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -112,8 +114,8 @@ public class BpmnGenerator {
                     sb.append("    <exclusiveGateway id=\"").append(key).append("\" name=\"").append(name).append("\"/>\n");
             default -> throw new BizException("未知节点类型：" + n.getNodeType());
         }
-        // 审批节点驳回策略=终止 → 生成专属终止结束事件
-        if ("approval".equals(n.getNodeType()) && "terminate".equals(n.getRejectStrategy())) {
+        // 审批节点：总是生成终止结束事件（terminate 策略，或 back_prev 无上一用户任务时兜底）
+        if ("approval".equals(n.getNodeType())) {
             sb.append("    <endEvent id=\"").append(key).append("_rejEnd\"><terminateEventDefinition/></endEvent>\n");
         }
     }
@@ -139,7 +141,7 @@ public class BpmnGenerator {
                     .collect(Collectors.toList());
 
             switch (node.getNodeType()) {
-                case "approval" -> appendApprovalFlows(sb, node, outs, all, idToKey);
+                case "approval" -> appendApprovalFlows(sb, node, outs, all, nodes, idToKey);
                 case "exclusiveSplit" -> {
                     outs.sort(exclusiveOrder());
                     for (ProcessLink l : outs) {
@@ -169,7 +171,7 @@ public class BpmnGenerator {
 
     /** 审批节点：批准线 + 驳回线（按驳回策略接目标） */
     private void appendApprovalFlows(StringBuilder sb, ProcessNode node, List<ProcessLink> outs,
-                                     List<ProcessLink> allLinks, Map<Long, String> idToKey) {
+                                     List<ProcessLink> allLinks, List<ProcessNode> nodes, Map<Long, String> idToKey) {
         // 批准线：正常后继
         for (ProcessLink l : outs) {
             appendFlow(sb, node.getNodeKey(), idToKey.get(l.getToNodeId()), "${approved}");
@@ -177,6 +179,10 @@ public class BpmnGenerator {
         // 驳回线目标
         String rejectTarget;
         String strategy = node.getRejectStrategy() == null ? "back_prev" : node.getRejectStrategy();
+        // 并行分支内：一票否决，驳回即终止整个流程（避免单支驳回与汇合等待冲突）
+        if (isInParallelBranch(node, nodes, allLinks, idToKey)) {
+            strategy = "terminate";
+        }
         switch (strategy) {
             case "terminate" -> rejectTarget = node.getNodeKey() + "_rejEnd";
             case "back_starter" -> {
@@ -187,14 +193,136 @@ public class BpmnGenerator {
                 rejectTarget = first != null ? idToKey.get(first.getToNodeId()) : node.getNodeKey();
             }
             default -> {
-                // back_prev：入边来源
-                ProcessLink in = allLinks.stream()
-                        .filter(l -> node.getNodeKey().equals(idToKey.get(l.getToNodeId())))
-                        .findFirst().orElse(null);
-                rejectTarget = in != null ? idToKey.get(in.getFromNodeId()) : node.getNodeKey();
+                // back_prev：退回上一个「用户任务」，跳过网关（避免驳回到分叉网关重新路由死循环）
+                String prev = previousUserTask(node, nodes, allLinks, idToKey);
+                // 无上一用户任务（首个任务 / join 之后）：终止流程，避免驳回指向网关造成死循环
+                rejectTarget = prev != null ? prev : node.getNodeKey() + "_rejEnd";
             }
         }
         appendFlow(sb, node.getNodeKey(), rejectTarget, "${!approved}");
+    }
+
+    /** 沿入边反向回溯，跳过网关，找到上一个用户任务（fill/approval）；找不到返回 null */
+    private String previousUserTask(ProcessNode node, List<ProcessNode> nodes,
+                                    List<ProcessLink> allLinks, Map<Long, String> idToKey) {
+        Map<String, String> keyToType = nodes.stream()
+                .collect(Collectors.toMap(ProcessNode::getNodeKey, ProcessNode::getNodeType, (a, b) -> a));
+        String cur = node.getNodeKey();
+        Set<String> visited = new HashSet<>();
+        while (cur != null && visited.add(cur)) {
+            final String curKey = cur;
+            List<ProcessLink> ins = allLinks.stream()
+                    .filter(l -> curKey.equals(idToKey.get(l.getToNodeId())))
+                    .toList();
+            if (ins.size() != 1) {
+                return null; // 无前驱或多前驱（join 后），无法确定唯一上一步
+            }
+            String prevKey = idToKey.get(ins.get(0).getFromNodeId());
+            String t = keyToType.getOrDefault(prevKey, "");
+            if ("fill".equals(t) || "approval".equals(t)) {
+                return prevKey;
+            }
+            if ("start".equals(t)) {
+                return null; // 已到 start，无更早用户任务
+            }
+            cur = prevKey; // 网关 → 继续回溯
+        }
+        return null;
+    }
+
+    /** 节点是否位于并行分支内（分叉与汇合之间）——用于一票否决：并行分支驳回即终止 */
+    private boolean isInParallelBranch(ProcessNode node, List<ProcessNode> nodes,
+                                       List<ProcessLink> allLinks, Map<Long, String> idToKey) {
+        Map<String, String> keyToType = nodes.stream()
+                .collect(Collectors.toMap(ProcessNode::getNodeKey, ProcessNode::getNodeType, (a, b) -> a));
+        String cur = node.getNodeKey();
+        Set<String> visited = new HashSet<>();
+        while (cur != null && visited.add(cur)) {
+            final String curKey = cur;
+            List<ProcessLink> ins = allLinks.stream()
+                    .filter(l -> curKey.equals(idToKey.get(l.getToNodeId())))
+                    .toList();
+            if (ins.size() != 1) {
+                return false; // 多前驱/无前驱，无法判断
+            }
+            String prevKey = idToKey.get(ins.get(0).getFromNodeId());
+            String t = keyToType.getOrDefault(prevKey, "");
+            if ("parallelSplit".equals(t)) {
+                return true; // 反向回溯遇到并行分叉 → 在并行分支内
+            }
+            if ("start".equals(t)) {
+                return false; // 已到开始
+            }
+            cur = prevKey; // fill/approval/网关 → 继续回溯（跨过 userTask，覆盖分支内所有用户任务）
+        }
+        return false;
+    }
+
+    /** 节点是否为「并行汇合后的第一个用户任务」（反向只跨网关，先遇 parallelJoin 则 true） */
+    private boolean afterParallelJoin(ProcessNode node, List<ProcessNode> nodes,
+                                      List<ProcessLink> allLinks, Map<Long, String> idToKey) {
+        Map<String, String> keyToType = nodes.stream()
+                .collect(Collectors.toMap(ProcessNode::getNodeKey, ProcessNode::getNodeType, (a, b) -> a));
+        String cur = node.getNodeKey();
+        Set<String> visited = new HashSet<>();
+        while (cur != null && visited.add(cur)) {
+            final String curKey = cur;
+            List<ProcessLink> ins = allLinks.stream()
+                    .filter(l -> curKey.equals(idToKey.get(l.getToNodeId())))
+                    .toList();
+            if (ins.size() != 1) {
+                return false;
+            }
+            String prevKey = idToKey.get(ins.get(0).getFromNodeId());
+            String t = keyToType.getOrDefault(prevKey, "");
+            if ("parallelJoin".equals(t)) {
+                return true;
+            }
+            if ("parallelSplit".equals(t) || "start".equals(t)
+                    || "fill".equals(t) || "approval".equals(t)) {
+                return false;
+            }
+            cur = prevKey; // 其它网关继续
+        }
+        return false;
+    }
+
+    /**
+     * 发布前校验并行相关约束（与前端 wizard 约定一致，兜底）：
+     * 1. 并行汇合后的第一个用户任务必须固定处理人；
+     * 2. 并行分支内审批节点驳回策略只能 terminate；
+     * 3. 并行汇合后第一个审批节点不能 back_prev。
+     */
+    public void validateParallelRules(List<ProcessNode> nodes, List<ProcessLink> links) {
+        Map<Long, String> idToKey = nodes.stream()
+                .filter(n -> n.getId() != null)
+                .collect(Collectors.toMap(ProcessNode::getId, ProcessNode::getNodeKey, (a, b) -> a));
+        for (ProcessNode n : nodes) {
+            boolean isUserTask = "fill".equals(n.getNodeType()) || "approval".equals(n.getNodeType());
+            if (!isUserTask) continue;
+
+            // 通用：固定处理人必须指定具体人员
+            if ("fixed".equals(n.getAssigneeMode())
+                    && (n.getFixedAssignee() == null || n.getFixedAssignee().isBlank())) {
+                throw new BizException("节点「" + n.getNodeName() + "」为固定处理人，但未指定处理人");
+            }
+
+            boolean inBranch = isInParallelBranch(n, nodes, links, idToKey);
+            boolean afterJoin = afterParallelJoin(n, nodes, links, idToKey);
+
+            if (afterJoin && !"fixed".equals(n.getAssigneeMode())) {
+                throw new BizException("并行汇合后的第一个任务「" + n.getNodeName() + "」必须为固定处理人");
+            }
+            if (!"approval".equals(n.getNodeType())) continue;
+
+            String s = n.getRejectStrategy() == null ? "back_prev" : n.getRejectStrategy();
+            if (inBranch && !"terminate".equals(s)) {
+                throw new BizException("并行分支内的审批节点「" + n.getNodeName() + "」驳回策略只能为终止流程");
+            }
+            if (afterJoin && "back_prev".equals(s)) {
+                throw new BizException("并行汇合后的审批节点「" + n.getNodeName() + "」不能选择退回上一步");
+            }
+        }
     }
 
     /** 输出一条 sequenceFlow（可带条件表达式） */

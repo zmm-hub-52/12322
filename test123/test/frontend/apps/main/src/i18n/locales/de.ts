@@ -3,6 +3,7 @@ export default {
   menu: {
     approvalStart: 'Prozess starten',
     approvalList: 'Meine Aufgaben',
+    approvalFinished: 'Abgeschlossene Prozesse',
     processConfig: 'Prozesskonfiguration',
     formConfig: 'Formularkonfiguration',
     dimensionConfig: 'Dimensionskonfiguration',

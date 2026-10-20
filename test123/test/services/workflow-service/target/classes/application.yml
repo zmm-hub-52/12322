@@ -1,0 +1,35 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: workflow-service
+  datasource:
+    # SQL Server 连接（本地开发占位，按实际环境修改）
+    url: jdbc:sqlserver://localhost:1433;databaseName=erp1;encrypt=true;trustServerCertificate=true
+    username: admin
+    password: admin
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true   # 下划线转驼峰
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 开发期打印 SQL
+  global-config:
+    db-config:
+      logic-delete-field: enabled        # 全局逻辑删除字段（软删除防呆）
+      logic-delete-value: 0
+      logic-not-delete-value: 1
+
+# Flowable 流程引擎配置
+flowable:
+  # 自动建表/升级引擎表（首次启动 true，生产改为 false 并走 flyway 脚本）
+  database-schema-update: true
+  # 关闭异步执行器（本地单机开发）
+  async-executor-activate: false
+
+# 日志
+logging:
+  level:
+    com.platform.workflow: debug

@@ -27,6 +27,7 @@ export interface MenuItem {
 export const menus: MenuItem[] = [
   { titleKey: 'menu.approvalStart', appName: 'approval', route: '/approval/start' },
   { titleKey: 'menu.approvalList', appName: 'approval', route: '/approval/list' },
+  { titleKey: 'menu.approvalFinished', appName: 'approval', route: '/approval/finished' },
   { titleKey: 'menu.processConfig', appName: 'workflowAdmin', route: '/workflow-admin/process' },
   { titleKey: 'menu.formConfig', appName: 'workflowAdmin', route: '/workflow-admin/form' },
   { titleKey: 'menu.dimensionConfig', appName: 'workflowAdmin', route: '/workflow-admin/dimension' },

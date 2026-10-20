@@ -32,7 +32,7 @@
           </td>
           <td>{{ formatTime(task.createTime) }}</td>
           <td>
-            <a class="link" @click="goDetail(task.instanceId)">{{ t('list.handle') }}</a>
+            <a class="link" @click="goDetail(task)">{{ t('list.handle') }}</a>
           </td>
         </tr>
         <tr v-if="tasks.length === 0">
@@ -73,8 +73,8 @@ function goStart(): void {
   router.push('/approval/start');
 }
 
-function goDetail(instanceId: number): void {
-  router.push(`/approval/detail/${instanceId}`);
+function goDetail(task: TaskView): void {
+  router.push({ path: `/approval/detail/${task.instanceId}`, query: { taskId: task.taskId } });
 }
 
 function formatTime(v: string | null): string {

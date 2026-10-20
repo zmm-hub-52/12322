@@ -62,6 +62,7 @@
           :key="tab.id"
           v-show="tab.active"
           class="content-pane content-pane--app"
+          :class="`content-pane--app-${tab.appName}`"
           :ref="(el) => tabs.setContainer(tab.id, el)"
         ></div>
       </main>
@@ -244,5 +245,15 @@ function onLogout(): void {
 .content-pane--app {
   padding: 0;
   overflow: hidden;
+}
+
+/* 审批中心子应用：宿主容器自身滚动（绕开无界 shadow 高度链），
+   配合子应用顶栏 sticky 实现「顶栏固定 + 内容滚动」。
+   workflow-admin 已走 100% 高度链 + 内部滚动，保持不动。 */
+.content-pane--app-approval {
+  overflow-y: auto;
+}
+.content-pane--app-approval wujie-app {
+  display: block;
 }
 </style>

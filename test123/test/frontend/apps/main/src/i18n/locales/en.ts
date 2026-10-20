@@ -3,6 +3,7 @@ export default {
   menu: {
     approvalStart: 'Start Process',
     approvalList: 'My Tasks',
+    approvalFinished: 'Finished Processes',
     processConfig: 'Process Config',
     formConfig: 'Form Config',
     dimensionConfig: 'Dimension Config',

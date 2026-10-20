@@ -26,15 +26,19 @@
           <td>{{ p.defName }}</td>
           <td class="desc">{{ p.description }}</td>
           <td>
-            <span class="tag" :class="p.published ? 'tag--published' : 'tag--draft'">
-              {{ p.published ? `${t('processList.statusPublished')} v${p.version}` : t('processList.statusDraft') }}
-            </span>
+            <span class="tag" :class="statusOf(p).cls">{{ statusOf(p).text }}</span>
           </td>
           <td>{{ p.version }}</td>
           <td class="actions">
             <a class="link" @click="goEdit(p)">{{ t('processList.edit') }}</a>
             <a class="link" @click="goForm(p)">{{ t('processList.formConfig') }}</a>
-            <a class="link" @click="onPublish(p)">{{ t('processList.publish') }}</a>
+            <a
+              class="link"
+              :class="{ 'link--disabled': publishing || !canPublish(p) }"
+              @click="publishing || !canPublish(p) ? undefined : onPublish(p)"
+            >
+              {{ t('processList.publish') }}
+            </a>
           </td>
         </tr>
         <tr v-if="processes.length === 0">
@@ -63,6 +67,7 @@ const { t } = useI18n();
 const router = useRouter();
 
 const processes = ref<ProcessDef[]>([]);
+const publishing = ref(false);
 
 onMounted(async () => {
   processes.value = await fetchProcessList();
@@ -85,11 +90,48 @@ function goForm(p: ProcessDef): void {
 
 /** 发布流程（版本 +1，生成快照） */
 async function onPublish(p: ProcessDef): Promise<void> {
-  const res = await publishProcess(p);
-  if (res.ok) {
-    toastMsg(t('wizard.published', { version: res.version }));
-    processes.value = await fetchProcessList();
+  if (publishing.value || !canPublish(p)) return;
+  publishing.value = true;
+  try {
+    const res = await publishProcess(p);
+    if (res.ok) {
+      toastMsg(t('wizard.published', { version: res.version }));
+      processes.value = await fetchProcessList();
+    }
+  } catch (e) {
+    toastMsg((e as Error).message);
+  } finally {
+    publishing.value = false;
   }
+}
+
+/** 是否有未发布改动（配置更新时间 > 最近发布时间） */
+function hasUnpublishedChanges(p: ProcessDef): boolean {
+  return (
+    !!p.publishedTime && !!p.updateTime && new Date(p.updateTime).getTime() > new Date(p.publishedTime).getTime()
+  );
+}
+
+/** 是否可发布：草稿恒可；已发布须有未发布改动 */
+function canPublish(p: ProcessDef): boolean {
+  if (!p.published) return true;
+  return hasUnpublishedChanges(p);
+}
+
+/**
+ * 状态徽标（方案 B：版本号只随发布 +1；「待发布改动」= 配置更新时间 > 最近发布时间）
+ */
+function statusOf(p: ProcessDef): { text: string; cls: string } {
+  if (!p.published) {
+    return { text: t('processList.statusDraft'), cls: 'tag--draft' };
+  }
+  if (hasUnpublishedChanges(p)) {
+    return {
+      text: `${t('processList.statusPublished')} v${p.version} · ${t('processList.unpublishedChanges')}`,
+      cls: 'tag--modified',
+    };
+  }
+  return { text: `${t('processList.statusPublished')} v${p.version}`, cls: 'tag--published' };
 }
 </script>
 
@@ -144,6 +186,10 @@ async function onPublish(p: ProcessDef): Promise<void> {
   background: #e8f5ee;
   color: var(--brand-success);
 }
+.tag--modified {
+  background: color-mix(in srgb, var(--brand-warning) 16%, var(--brand-bg));
+  color: var(--brand-warning);
+}
 .actions {
   white-space: nowrap;
 }
@@ -153,6 +199,10 @@ async function onPublish(p: ProcessDef): Promise<void> {
 .link {
   color: var(--brand-primary);
   cursor: pointer;
+}
+.link--disabled {
+  color: var(--brand-text-disabled);
+  cursor: not-allowed;
 }
 .empty {
   text-align: center;

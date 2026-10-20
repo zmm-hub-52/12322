@@ -5,6 +5,7 @@
 
 import { createSubAppHttp } from '@platform/sdk';
 import type {
+  FinishedInstance,
   GraphView,
   ImportPreview,
   NodeSchema,
@@ -81,24 +82,52 @@ export async function fetchMyTasks(assignee: string): Promise<TaskView[]> {
   return unwrap<TaskView[]>(http.get('/api/task/my', { params: { assignee } }));
 }
 
-/** 实例当前节点 schema */
-export async function fetchNodeSchema(instanceId: number): Promise<NodeSchema> {
-  return unwrap<NodeSchema>(http.get(`/api/instance/${instanceId}/schema`));
+/** 实例当前节点 schema（taskId 用于并行时定位具体任务） */
+export async function fetchNodeSchema(instanceId: number, taskId?: string): Promise<NodeSchema> {
+  return unwrap<NodeSchema>(http.get(`/api/instance/${instanceId}/schema`, { params: { taskId } }));
 }
 
 /** 填写节点提交 */
-export async function submitTask(taskId: string, formData: Record<string, unknown>): Promise<void> {
-  await unwrap<unknown>(http.post('/api/task/submit', { taskId, formData }));
+export async function submitTask(
+  taskId: string,
+  formData: Record<string, unknown>,
+  nextAssignees?: Record<string, string>,
+): Promise<void> {
+  await unwrap<unknown>(http.post('/api/task/submit', { taskId, formData, nextAssignees: nextAssignees ?? null }));
 }
 
 /** 审批（通过/驳回） */
-export async function approveTask(taskId: string, approved: boolean, comment?: string): Promise<void> {
-  await unwrap<unknown>(http.post('/api/task/approve', { taskId, approved, comment }));
+export async function approveTask(
+  taskId: string,
+  approved: boolean,
+  comment?: string,
+  formData?: Record<string, unknown>,
+  nextAssignees?: Record<string, string>,
+): Promise<void> {
+  await unwrap<unknown>(
+    http.post('/api/task/approve', {
+      taskId,
+      approved,
+      comment,
+      formData: formData ?? null,
+      nextAssignees: nextAssignees ?? null,
+    }),
+  );
 }
 
 /** 实例轨迹 */
 export async function fetchRecords(instanceId: number): Promise<RecordView[]> {
   return unwrap<RecordView[]>(http.get(`/api/instance/${instanceId}/records`));
+}
+
+/** 已完结实例列表（正常走完 + 驳回终止） */
+export async function fetchFinishedInstances(): Promise<FinishedInstance[]> {
+  return unwrap<FinishedInstance[]>(http.get('/api/instance/finished'));
+}
+
+/** 导出实例 formData 的下载地址（直接浏览器下载） */
+export function formDataExportUrl(instanceId: number): string {
+  return `${API_BASE_URL}/api/instance/${instanceId}/form-data-export`;
 }
 
 // ==================== Excel 导入发起 ====================

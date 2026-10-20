@@ -95,7 +95,7 @@ public class SchemaAssembler {
     /**
      * 拼装单个字段的完整定义：字段库默认 + 节点级 override 覆盖。
      * 字段结构（与前端渲染器约定）：
-     * { key, label, type, mode, required, valueRule, validation, defaultValue, placeholder, rule }
+     * { key, label, type, mode, required, rule, placeholder }
      */
     private Map<String, Object> assembleField(FieldDef def, NodeFormField nff) {
         Map<String, Object> override = parseJsonObject(nff.getOverride());
@@ -108,14 +108,10 @@ public class SchemaAssembler {
         // 节点级覆盖优先，否则用字段库默认
         field.put("required", override != null && override.containsKey("required")
                 ? override.get("required") : Boolean.TRUE.equals(def.getRequired()));
-        field.put("valueRule", override != null && override.get("valueRule") != null
-                ? override.get("valueRule") : parseJsonObject(def.getValueRule()));
-        field.put("validation", override != null && override.get("validation") != null
-                ? override.get("validation") : parseJsonObject(def.getValidation()));
-        // 以下为预留槽位（第一版不实现）
-        field.put("defaultValue", null);
+        field.put("rule", override != null && override.get("rule") != null
+                ? override.get("rule") : parseJsonObject(def.getFieldRule()));
+        field.put("description", def.getDescription());
         field.put("placeholder", null);
-        field.put("rule", null);
         return field;
     }
 

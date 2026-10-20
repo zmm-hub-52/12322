@@ -2,6 +2,7 @@ package com.platform.workflow.controller;
 
 import com.platform.workflow.common.Result;
 import com.platform.workflow.dto.ApproveRequest;
+import com.platform.workflow.dto.FinishedInstanceDto;
 import com.platform.workflow.dto.StartRequest;
 import com.platform.workflow.dto.SubmitRequest;
 import com.platform.workflow.dto.TaskViewDto;
@@ -10,6 +11,9 @@ import com.platform.workflow.entity.ProcessRecord;
 import com.platform.workflow.service.ProcessRuntimeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -74,13 +78,14 @@ public class ProcessRuntimeController {
 
     /**
      * 接口：GET /api/instance/{id}/schema —— 获取实例当前节点的表单 schema
-     * 参数：id 业务实例ID。
+     * 参数：id 业务实例ID；taskId 引擎任务ID（并行时定位具体任务用）。
      * 返回：Map —— { schemaVersion, taskId, nodeKey, nodeName, nodeType, fields, formData, finished }；
      *       finished=true 表示流程已结束（endActivityId 标识结束方式）。
      */
     @GetMapping("/instance/{id}/schema")
-    public Result<Map<String, Object>> getNodeSchema(@PathVariable Long id) {
-        return Result.ok(runtimeService.getNodeSchema(id));
+    public Result<Map<String, Object>> getNodeSchema(@PathVariable Long id,
+                                                     @RequestParam(required = false) String taskId) {
+        return Result.ok(runtimeService.getNodeSchema(id, taskId));
     }
 
     /**
@@ -91,5 +96,26 @@ public class ProcessRuntimeController {
     @GetMapping("/instance/{id}/records")
     public Result<List<ProcessRecord>> records(@PathVariable Long id) {
         return Result.ok(runtimeService.records(id));
+    }
+
+    /**
+     * 接口：GET /api/instance/finished —— 已完结实例列表（正常走完 + 驳回终止）
+     * 返回：列表（含流程名、起止时间、状态）。
+     */
+    @GetMapping("/instance/finished")
+    public Result<List<FinishedInstanceDto>> finishedInstances() {
+        return Result.ok(runtimeService.listFinished());
+    }
+
+    /**
+     * 接口：GET /api/instance/{id}/form-data-export —— 导出实例 formData 为 xlsx（一行，列头=字段英文 key）
+     */
+    @GetMapping("/instance/{id}/form-data-export")
+    public ResponseEntity<byte[]> exportFormData(@PathVariable Long id) {
+        byte[] bytes = runtimeService.exportFormData(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=form-data-" + id + ".xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
     }
 }

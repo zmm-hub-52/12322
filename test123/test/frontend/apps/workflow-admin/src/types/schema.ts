@@ -3,24 +3,25 @@
  */
 
 /** 字段业务类型（中性业务语义，渲染时由前端映射 iX 组件） */
-export type FieldType = 'input' | 'textarea' | 'number' | 'select' | 'date' | 'boolean';
+export type FieldType = 'input' | 'textarea' | 'number' | 'select' | 'date';
 
 /** 字段展示方式（节点级） */
 export type FieldMode = 'editable' | 'readonly' | 'hidden';
 
-/** 取值规则（可视化编辑器自动序列化 JSON，用户不手写） */
+/** 字段规则（取值 + 校验 二合一，可视化编辑器自动序列化，用户不手写） */
+/** 取值约束（单条，四选一；供 requiredWhen 内层使用） */
 export type ValueRule =
   | { type: 'enum'; options: string[] }
   | { type: 'codeRange'; prefix: string; start: number; end: number; width: number }
-  | { type: 'range'; min: number; max: number; decimals?: number };
+  | { type: 'range'; min: number; max: number; decimals?: number }
+  | { type: 'pattern'; pattern: string };
 
-/** 校验规则 */
-export interface ValidationRule {
-  required?: boolean;
-  minLength?: number;
-  maxLength?: number;
-  pattern?: string;
-}
+export type Rule =
+  | ValueRule
+  /** 条件必填：触发字段满足条件时本字段必填；可选附带一条取值约束 */
+  | { type: 'requiredWhen'; fieldKey: string; operator: string; value: string; rule?: ValueRule }
+  /** 条件取值校验：命中第一条满足条件的 case 时，本字段必须等于 expect */
+  | { type: 'valueWhen'; cases: { fieldKey: string; operator: string; value: string; expect: string }[] };
 
 /** 字段定义（v3：挂在维度分类下——维表第三层就是字段） */
 export interface FieldDef {
@@ -29,11 +30,14 @@ export interface FieldDef {
   categoryId?: number;
   fieldKey: string;
   fieldName: string;
+  /** 字段描述（运维手输，填写时 placeholder：字段名|字段描述） */
+  description?: string;
   fieldType: FieldType;
+  /** 默认是否必填（字段级；节点可覆盖） */
+  required: boolean;
   defaultValue?: string;
   placeholder?: string;
-  valueRule?: ValueRule;
-  validation?: ValidationRule;
+  rule?: Rule;
   enabled: boolean;
 }
 
@@ -62,6 +66,10 @@ export interface ProcessNode {
   nodeType: NodeType;
   /** 审批节点驳回策略（默认 back_prev） */
   rejectStrategy?: RejectStrategy;
+  /** 处理人模式：fixed 固定（配置期指定）/ dynamic 动态（上一环节选下一人） */
+  assigneeMode?: 'fixed' | 'dynamic';
+  /** 固定处理人 username（assigneeMode=fixed 时生效） */
+  fixedAssignee?: string;
 }
 
 /** 排他分支条件（可视化编辑器自动序列化，用户零表达式语言） */
@@ -96,8 +104,7 @@ export interface NodeFormField {
   fieldType: FieldType;
   mode: FieldMode;
   required: boolean;
-  valueRule?: ValueRule;
-  validation?: ValidationRule;
+  rule?: Rule;
   placeholder?: string;
   sortNo: number;
 }
@@ -114,6 +121,10 @@ export interface ProcessDef {
   version: number;
   /** 是否已发布过（false = 纯草稿） */
   published: boolean;
+  /** 最近配置更新时间（后端 update_time，ISO 字符串） */
+  updateTime?: string;
+  /** 最近发布时间（后端 published_time；未发布为 undefined） */
+  publishedTime?: string;
   /** 节点集合（DAG） */
   nodes: ProcessNode[];
   /** 连线集合 */

@@ -53,10 +53,10 @@ export const useDraftStore = defineStore('draft', {
   }),
 
   getters: {
-    /** 已配置字段的节点 key（fill 节点完成度/流程图角标） */
+    /** 已配置字段的节点 key（start/fill/approval 节点完成度/流程图角标） */
     configuredKeys(state): string[] {
       return state.nodes
-        .filter((n) => n.nodeType === 'fill')
+        .filter((n) => n.nodeType === 'start' || n.nodeType === 'fill' || n.nodeType === 'approval')
         .filter((n) => (state.nodeFields[n.nodeKey] ?? []).length > 0)
         .map((n) => n.nodeKey);
     },
@@ -97,9 +97,9 @@ export const useDraftStore = defineStore('draft', {
       this.nodes = def.nodes.map((n) => ({ ...n }));
       this.links = def.links.map((l) => ({ ...l }));
       this.nodeFields = {};
-      // 加载各节点字段（start/fill 可配表单；approval/网关不配）
+      // 加载各节点字段（start/fill/approval 可配表单；网关/结束不配）
       for (const n of this.nodes) {
-        if (n.nodeType === 'start' || n.nodeType === 'fill') {
+        if (n.nodeType === 'start' || n.nodeType === 'fill' || n.nodeType === 'approval') {
           this.nodeFields[n.nodeKey] = await api.apiListNodeFields(defId, n.nodeKey);
         }
       }

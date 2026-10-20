@@ -45,4 +45,10 @@ public class ProcessInstance extends BaseEntity {
 
     /** JSON：业务数据（所有动态字段的值，全流程共享一份；亦作为流程变量供条件路由） */
     private String formData;
+
+    /** 状态：active 进行中 / finished 正常走完 / terminated 驳回终止（业务自维护，结束时同步更新） */
+    private String status;
+
+    /** 结束时间（结束时写入） */
+    private java.time.LocalDateTime endTime;
 }

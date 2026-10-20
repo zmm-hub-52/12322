@@ -41,7 +41,14 @@ const userName = computed(() => {
   justify-content: space-between;
   height: 40px;
   border-bottom: 1px solid var(--brand-border);
-  margin-bottom: 8px;
+  /* 顶栏吸顶：宿主容器滚动时保持可见。
+     负 margin 抵消 .app-shell 的左右 16px padding，让背景顶满容器宽 */
+  margin: 0 -16px 8px;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--brand-bg);
 }
 .app-bar__title {
   font-weight: 600;

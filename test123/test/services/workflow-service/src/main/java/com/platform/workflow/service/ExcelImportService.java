@@ -122,11 +122,33 @@ public class ExcelImportService {
             String value = data.getOrDefault(key, "");
             boolean empty = value.isEmpty();
 
-            // 必填
-            if (Boolean.TRUE.equals(f.get("required")) && empty) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rule = (Map<String, Object>) f.get("rule");
+            String ruleType = rule == null ? "" : String.valueOf(rule.getOrDefault("type", ""));
+
+            // 必填（含条件必填 requiredWhen）
+            boolean required = Boolean.TRUE.equals(f.get("required"));
+            boolean condRequired = "requiredWhen".equals(ruleType) && matchCondition(rule, data);
+            if ((required || condRequired) && empty) {
                 errors.add(label + "（" + key + "）为必填");
                 continue;
             }
+
+            // 条件取值校验（valueWhen）：命中第一条满足条件的 case 时值必须等于 expect
+            if ("valueWhen".equals(ruleType)) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> cases = (List<Map<String, Object>>) rule.getOrDefault("cases", List.of());
+                for (Map<String, Object> c : cases) {
+                    if (matchCondition(c, data)) {
+                        String expect = String.valueOf(c.getOrDefault("expect", ""));
+                        if (!expect.equals(value)) {
+                            errors.add(label + " 当前应为 " + expect);
+                        }
+                        break; // 命中第一条即生效
+                    }
+                }
+            }
+
             if (empty) continue;
 
             // 类型校验
@@ -140,40 +162,67 @@ public class ExcelImportService {
                 errors.add(label + " 需为 YYYY-MM-DD 格式，当前：" + value);
             }
 
-            // 取值规则校验
-            @SuppressWarnings("unchecked")
-            Map<String, Object> valueRule = (Map<String, Object>) f.get("valueRule");
-            if (valueRule != null) {
-                String ruleType = String.valueOf(valueRule.getOrDefault("type", ""));
-                if ("enum".equals(ruleType)) {
-                    @SuppressWarnings("unchecked")
-                    List<String> options = (List<String>) valueRule.getOrDefault("options", List.of());
-                    if (!options.contains(value)) {
-                        errors.add(label + " 枚举值不合法，可选：" + String.join("/", options));
-                    }
-                } else if ("range".equals(ruleType)) {
-                    try {
-                        double num = Double.parseDouble(value);
-                        Object minO = valueRule.get("min");
-                        Object maxO = valueRule.get("max");
-                        if (minO instanceof Number && num < ((Number) minO).doubleValue()) {
-                            errors.add(label + " 不能小于 " + minO);
-                        }
-                        if (maxO instanceof Number && num > ((Number) maxO).doubleValue()) {
-                            errors.add(label + " 不能大于 " + maxO);
-                        }
-                    } catch (NumberFormatException e) {
-                        // 非数字已由上方 number 类型校验报错，此处去重
+            // 规则校验（取值+校验二合一）：enum / codeRange / range / pattern
+            if (rule != null) {
+                applyValueRule(rule, value, label, errors);
+                // 条件必填附带的内层取值约束（命中条件时）
+                if ("requiredWhen".equals(ruleType) && condRequired) {
+                    Object inner = rule.get("rule");
+                    if (inner instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> innerRule = (Map<String, Object>) inner;
+                        applyValueRule(innerRule, value, label, errors);
                     }
                 }
             }
+        }
+        return errors;
+    }
 
-            // 正则校验
+    /** 对单个取值约束（enum/codeRange/range/pattern）校验，命中则追加错误 */
+    private void applyValueRule(Map<String, Object> rule, String value, String label, List<String> errors) {
+        String rt = String.valueOf(rule.getOrDefault("type", ""));
+        if ("enum".equals(rt)) {
             @SuppressWarnings("unchecked")
-            Map<String, Object> validation = (Map<String, Object>) f.get("validation");
-            if (validation != null && validation.get("pattern") != null) {
+            List<String> options = (List<String>) rule.getOrDefault("options", List.of());
+            if (!options.contains(value)) {
+                errors.add(label + " 枚举值不合法，可选：" + String.join("/", options));
+            }
+        } else if ("range".equals(rt)) {
+            try {
+                double num = Double.parseDouble(value);
+                Object minO = rule.get("min");
+                Object maxO = rule.get("max");
+                if (minO instanceof Number && num < ((Number) minO).doubleValue()) {
+                    errors.add(label + " 不能小于 " + minO);
+                }
+                if (maxO instanceof Number && num > ((Number) maxO).doubleValue()) {
+                    errors.add(label + " 不能大于 " + maxO);
+                }
+            } catch (NumberFormatException e) {
+                // 非数字已由上方 number 类型校验报错
+            }
+        } else if ("codeRange".equals(rt)) {
+            String prefix = String.valueOf(rule.getOrDefault("prefix", ""));
+            if (!prefix.isEmpty() && !value.startsWith(prefix)) {
+                errors.add(label + " 编码需以 " + prefix + " 开头");
+            } else {
                 try {
-                    if (!Pattern.compile(String.valueOf(validation.get("pattern"))).matcher(value).matches()) {
+                    int n = Integer.parseInt(value.substring(prefix.length()));
+                    int start = rule.get("start") instanceof Number ? ((Number) rule.get("start")).intValue() : 1;
+                    int end = rule.get("end") instanceof Number ? ((Number) rule.get("end")).intValue() : 999;
+                    if (n < start || n > end) {
+                        errors.add(label + " 编码序号需在 " + start + "~" + end + " 之间");
+                    }
+                } catch (NumberFormatException e) {
+                    errors.add(label + " 编码格式不正确");
+                }
+            }
+        } else if ("pattern".equals(rt)) {
+            Object pattern = rule.get("pattern");
+            if (pattern != null) {
+                try {
+                    if (!Pattern.compile(String.valueOf(pattern)).matcher(value).matches()) {
                         errors.add(label + " 格式不正确");
                     }
                 } catch (Exception ignored) {
@@ -181,6 +230,32 @@ public class ExcelImportService {
                 }
             }
         }
-        return errors;
+    }
+
+    /** 判断某条件（fieldKey/operator/value）在当前行数据下是否成立 */
+    private boolean matchCondition(Map<String, Object> cond, Map<String, String> data) {
+        String fieldKey = String.valueOf(cond.getOrDefault("fieldKey", ""));
+        String op = String.valueOf(cond.getOrDefault("operator", "eq"));
+        String cv = String.valueOf(cond.getOrDefault("value", ""));
+        String tv = data.getOrDefault(fieldKey, "");
+        return switch (op) {
+            case "isEmpty" -> tv.isEmpty();
+            case "isNotEmpty" -> !tv.isEmpty();
+            case "contains" -> tv.contains(cv);
+            case "neq" -> !tv.equals(cv);
+            case "gt" -> toDouble(tv) > toDouble(cv);
+            case "gte" -> toDouble(tv) >= toDouble(cv);
+            case "lt" -> toDouble(tv) < toDouble(cv);
+            case "lte" -> toDouble(tv) <= toDouble(cv);
+            default -> tv.equals(cv);
+        };
+    }
+
+    private double toDouble(String s) {
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+            return Double.NaN;
+        }
     }
 }

@@ -31,6 +31,9 @@ public class FieldDef extends BaseEntity {
     /** 字段名（默认 label） */
     private String fieldName;
 
+    /** 字段描述（运维手输，填写时作为 placeholder 提示：字段名|字段描述） */
+    private String description;
+
     /**
      * 中立业务类型（不存组件名，前端映射到 iX 组件）：
      * input/textarea/number/select/date/boolean
@@ -38,15 +41,13 @@ public class FieldDef extends BaseEntity {
     private String fieldType;
 
     /**
-     * JSON：默认取值规则（防呆核心）
-     * - {type:'enum', options:['A','B','C']}  枚举（选项由运维手填）
-     * - {type:'codeRange', prefix:'A', start:1, end:14, width:2} 编码范围（自动生成连续编号）
-     * - {type:'range', min:1, max:100}       数值范围
+     * JSON：字段规则（取值 + 校验 二合一）
+     * - {type:'enum', options:['A','B','C']}                             枚举（下拉，选项由运维手填）
+     * - {type:'codeRange', prefix:'A', start:1, end:14, width:2}         编码范围（≤50 可输入下拉，>50 输入+校验）
+     * - {type:'range', min:1, max:100}                                   数值范围
+     * - {type:'pattern', pattern:'^1[3-9]\\d{9}$'}                       正则（手机号/邮箱等）
      */
-    private String valueRule;
-
-    /** JSON：默认校验 {maxLength, pattern, ...}（管「值长什么样」，与取值规则分开） */
-    private String validation;
+    private String fieldRule;
 
     /** 默认是否必填（节点可覆盖） */
     private Boolean required;

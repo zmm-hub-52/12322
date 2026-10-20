@@ -9,7 +9,8 @@
         <h2 class="typography-h2 page-title">{{ t('form.title') }}</h2>
         <p class="typography-body page-subtitle">{{ t('form.subtitle') }}</p>
       </div>
-      <IxButton variant="primary" :disabled="saving || !selectedNode || selectedNode.nodeType === 'approval'" @click="save">
+      <!-- 保存=整份草稿落盘（store 内所有节点字段），不随当前节点类型置灰 -->
+      <IxButton variant="primary" :disabled="saving || !nodes.length" @click="save">
         {{ t('form.save') }}
       </IxButton>
     </div>
@@ -45,9 +46,9 @@
       <div class="card card--grow">
         <div class="card__title">{{ t('form.fieldCard') }}</div>
 
-        <!-- 审批节点：无需表单 -->
-        <div v-if="selectedNode?.nodeType === 'approval'" class="approval-hint">
-          {{ t('form.approvalHint') }}
+        <!-- 网关/结束节点：无需表单 -->
+        <div v-if="isNonFormNode" class="approval-hint">
+          {{ t('form.noFormHint') }}
         </div>
 
         <div v-else class="field-area">
@@ -105,7 +106,7 @@
                   <IxSelectItem :label="t('form.modeReadonly')" value="readonly" />
                   <IxSelectItem :label="t('form.modeHidden')" value="hidden" />
                 </IxSelect>
-                <IxToggle v-model="f.required" class="sel-row__req" />
+                <IxToggle :checked="f.required" @checked-change="f.required = $event.detail" class="sel-row__req" />
                 <span class="sel-row__req-label">{{ t('form.required') }}</span>
                 <span class="sel-row__spacer"></span>
                 <IxButton variant="secondary" :disabled="i === 0" @click="moveField(i, -1)">
@@ -120,13 +121,10 @@
                 </IxButton>
               </div>
 
-              <!-- 展开：取值规则 / 校验规则 / 提示文案 -->
+              <!-- 展开：字段规则 / 提示文案 -->
               <div v-if="expandedKey === f.fieldKey" class="sel-detail">
                 <div class="sel-detail__block">
-                  <ValueRuleEditor v-model="f.valueRule" />
-                </div>
-                <div class="sel-detail__block">
-                  <ValidationEditor v-model="f.validation" />
+                  <RuleEditor v-model="f.rule" :fields="ruleFields(f.fieldKey)" />
                 </div>
                 <div class="sel-detail__row">
                   <span class="sel-detail__label">Placeholder</span>
@@ -158,8 +156,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { IxButton, IxInput, IxSelect, IxSelectItem, IxToggle } from '@platform/ui-components';
 import FlowGraph from '../../components/FlowGraph.vue';
-import ValueRuleEditor from '../../components/ValueRuleEditor.vue';
-import ValidationEditor from '../../components/ValidationEditor.vue';
+import RuleEditor from '../../components/RuleEditor.vue';
 import { useDraftStore } from '../../stores/draft';
 import {
   fetchCategories,
@@ -173,6 +170,7 @@ import type {
   DimensionCategory,
   FieldDef,
   NodeFormField,
+  NodeType,
   ProcessDef,
 } from '../../types/schema';
 
@@ -203,10 +201,20 @@ const groupedLibrary = ref<FieldDef[]>([]);
 const selectedKey = ref('');
 /** 当前节点字段（store.nodeFields[key] 的引用：增删改直接落内存草稿） */
 const nodeFields = ref<NodeFormField[]>([]);
+/** 同表单的其它字段（条件规则触发字段候选） */
+function ruleFields(selfKey: string): { key: string; label: string }[] {
+  return nodeFields.value.filter((x) => x.fieldKey !== selfKey).map((x) => ({ key: x.fieldKey, label: x.fieldName }));
+}
 const expandedKey = ref('');
 const saving = ref(false);
 
 const selectedNode = computed(() => nodes.value.find((n) => n.nodeKey === selectedKey.value));
+/** 表单可配置节点：start/fill/approval；网关/结束无需表单 */
+const FORM_NODE_TYPES = new Set<NodeType>(['start', 'fill', 'approval']);
+const isNonFormNode = computed(() => {
+  const node = selectedNode.value;
+  return !!node && !FORM_NODE_TYPES.has(node.nodeType);
+});
 /** 已配置字段的节点（流程图角标，派生自 store） */
 const configuredKeys = computed(() => store.configuredKeys);
 
@@ -311,10 +319,9 @@ function addField(def: FieldDef): void {
     fieldKey: def.fieldKey,
     fieldName: def.fieldName,
     fieldType: def.fieldType,
-    mode: 'editable',
-    required: def.validation?.required ?? false,
-    valueRule: def.valueRule ? { ...def.valueRule } : undefined,
-    validation: def.validation ? { ...def.validation } : undefined,
+    mode: selectedNode.value?.nodeType === 'approval' ? 'readonly' : 'editable',
+    required: def.required,
+    rule: def.rule ? { ...def.rule } : undefined,
     placeholder: def.placeholder ?? '',
     sortNo: nodeFields.value.length + 1,
   });

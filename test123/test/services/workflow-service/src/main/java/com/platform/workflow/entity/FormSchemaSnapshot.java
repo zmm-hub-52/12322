@@ -29,6 +29,9 @@ public class FormSchemaSnapshot {
     /** JSON：全流程所有节点的完整 schema（字段定义已展开、自包含） */
     private String snapshotJson;
 
+    /** JSON：可执行图快照（节点 + 连线 + 处理人元数据；运行期只读，与配置活表解耦） */
+    private String graphJson;
+
     /** 生成时间（快照不可变，无 update_time） */
     private LocalDateTime createTime;
 }

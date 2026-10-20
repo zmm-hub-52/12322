@@ -27,8 +27,24 @@
           :ref="(el) => setFormRef(el)"
           v-model="formData"
           :fields="schema.fields"
-          :readonly="schema.nodeType !== 'fill' || schema.finished"
+          :readonly="schema.finished"
         />
+      </div>
+
+      <!-- 下一处理人（动态节点，串行 1 个 / 并行多支） -->
+      <div v-if="dynamicNextNodes.length" class="panel ops">
+        <label class="ops__label">{{ t('detail.nextAssignee') }}</label>
+        <div v-for="n in dynamicNextNodes" :key="n.nodeKey" class="ops__row">
+          <span class="ops__node">{{ n.nodeName }}</span>
+          <IxSelect v-model="nextAssignees[n.nodeKey]" class="ops__assignee">
+            <IxSelectItem
+              v-for="u in userOptions"
+              :key="u.username"
+              :label="`${u.name}（${u.username}）`"
+              :value="u.username"
+            />
+          </IxSelect>
+        </div>
       </div>
 
       <!-- 审批操作区 -->
@@ -36,7 +52,7 @@
         <label class="ops__label">{{ t('detail.comment') }}</label>
         <textarea v-model="comment" class="ops__comment" :placeholder="t('detail.commentPh')"></textarea>
         <div class="ops__btns">
-          <IxButton variant="primary" :disabled="acting" @click="doApprove(true)">
+          <IxButton variant="primary" :disabled="acting || missingNextAssignee" @click="doApprove(true)">
             {{ t('detail.approve') }}
           </IxButton>
           <IxButton :disabled="acting" @click="doApprove(false)">
@@ -47,7 +63,7 @@
 
       <!-- 填写节点操作区 -->
       <div v-if="schema.nodeType === 'fill' && !schema.finished" class="panel ops">
-        <IxButton variant="primary" :disabled="acting" @click="doSubmit">
+        <IxButton variant="primary" :disabled="acting || missingNextAssignee" @click="doSubmit">
           {{ t('detail.submit') }}
         </IxButton>
       </div>
@@ -72,14 +88,14 @@
 /**
  * 办理页：渲染当前节点表单（fill 可编辑提交 / approval 只读+通过驳回）+ 轨迹时间线。
  */
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { IxButton } from '@platform/ui-components';
+import { IxButton, IxSelect, IxSelectItem } from '@platform/ui-components';
 import FormRenderer from '../../components/FormRenderer.vue';
-import { approveTask, fetchNodeSchema, fetchRecords, submitTask } from '../../api';
+import { approveTask, fetchNodeSchema, fetchRecords, fetchUsers, submitTask } from '../../api';
 import { getFeedback } from '@platform/sdk';
-import type { NodeSchema, RecordView } from '../../types/schema';
+import type { NodeSchema, RecordView, UserView } from '../../types/schema';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -87,13 +103,21 @@ const router = useRouter();
 const { showToast } = getFeedback();
 
 const instanceId = Number(route.params.id);
+const taskId = (route.query.taskId as string) || '';
 const schema = ref<NodeSchema | null>(null);
 const records = ref<RecordView[]>([]);
 const formData = ref<Record<string, unknown>>({});
 const comment = ref('');
 const acting = ref(false);
 const error = ref('');
+const userOptions = ref<UserView[]>([]);
+const nextAssignees = reactive<Record<string, string>>({});
 let formRef: InstanceType<typeof FormRenderer> | null = null;
+
+/** 下一动态节点（需选处理人；固定节点自动分配不展示） */
+const dynamicNextNodes = computed(() => (schema.value?.nextNodes ?? []).filter((n) => n.assigneeMode === 'dynamic'));
+/** 是否还有动态下一节点未选处理人 */
+const missingNextAssignee = computed(() => dynamicNextNodes.value.some((n) => !nextAssignees[n.nodeKey]));
 
 function setFormRef(el: unknown): void {
   formRef = (el as InstanceType<typeof FormRenderer>) ?? null;
@@ -101,10 +125,15 @@ function setFormRef(el: unknown): void {
 
 async function load(): Promise<void> {
   try {
-    const [s, recs] = await Promise.all([fetchNodeSchema(instanceId), fetchRecords(instanceId)]);
+    const [s, recs, users] = await Promise.all([
+      fetchNodeSchema(instanceId, taskId),
+      fetchRecords(instanceId),
+      fetchUsers(),
+    ]);
     schema.value = s;
     formData.value = { ...(s.formData ?? {}) };
     records.value = recs;
+    userOptions.value = users;
   } catch (e) {
     error.value = (e as Error).message;
   }
@@ -117,10 +146,9 @@ async function doSubmit(): Promise<void> {
   if (formRef && !formRef.validate()) return;
   acting.value = true;
   try {
-    await submitTask(schema.value.taskId, { ...formData.value });
+    await submitTask(schema.value.taskId, { ...formData.value }, { ...nextAssignees });
     showToast({ message: t('detail.submitted') });
-    comment.value = '';
-    await load();
+    router.push('/approval/list');
   } catch (e) {
     showToast({ message: (e as Error).message });
   } finally {
@@ -132,10 +160,15 @@ async function doApprove(approved: boolean): Promise<void> {
   if (!schema.value?.taskId) return;
   acting.value = true;
   try {
-    await approveTask(schema.value.taskId, approved, comment.value || undefined);
+    await approveTask(
+      schema.value.taskId,
+      approved,
+      comment.value || undefined,
+      { ...formData.value },
+      { ...nextAssignees },
+    );
     showToast({ message: approved ? t('detail.approved') : t('detail.rejected') });
-    comment.value = '';
-    await load();
+    router.push('/approval/list');
   } catch (e) {
     showToast({ message: (e as Error).message });
   } finally {
@@ -213,6 +246,20 @@ function formatTime(v: string): string {
   color: var(--brand-text);
   font-family: inherit;
   resize: vertical;
+}
+.ops__assignee {
+  width: 320px;
+}
+.ops__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ops__node {
+  width: 160px;
+  font-size: 13px;
+  color: var(--brand-text-secondary);
+  white-space: nowrap;
 }
 .ops__btns {
   display: flex;

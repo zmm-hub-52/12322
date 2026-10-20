@@ -3,6 +3,7 @@ export default {
   menu: {
     approvalStart: '发起流程',
     approvalList: '我的待办',
+    approvalFinished: '已完结流程',
     processConfig: '流程配置',
     formConfig: '表单配置',
     dimensionConfig: '维表配置',

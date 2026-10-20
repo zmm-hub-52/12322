@@ -16,4 +16,7 @@ public class SubmitRequest {
 
     /** 本节点提交的表单数据（合并进实例数据并作为流程变量） */
     private Map<String, Object> formData;
+
+    /** 下一处理人（nodeKey -> 处理人；assignee_mode=dynamic 的下一用户任务需指定） */
+    private Map<String, String> nextAssignees;
 }

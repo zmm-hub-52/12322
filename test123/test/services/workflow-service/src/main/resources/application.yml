@@ -6,7 +6,7 @@ spring:
     name: workflow-service
   datasource:
     # SQL Server 连接（本地开发占位，按实际环境修改）
-    url: jdbc:sqlserver://localhost:1433;databaseName=erp;encrypt=true;trustServerCertificate=true
+    url: jdbc:sqlserver://localhost:1433;databaseName=erp1;encrypt=true;trustServerCertificate=true
     username: admin
     password: admin
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver

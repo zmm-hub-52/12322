@@ -39,6 +39,9 @@ public class ProcessDef extends BaseEntity {
     /** 发布时记录的 Flowable 部署 ID（版本溯源） */
     private String deploymentId;
 
+    /** 最近发布时间（列表「待发布改动」徽标：update_time > published_time） */
+    private java.time.LocalDateTime publishedTime;
+
     /** 软删除：1=启用 0=停用（配合全局逻辑删除配置） */
     @TableLogic
     private Boolean enabled;

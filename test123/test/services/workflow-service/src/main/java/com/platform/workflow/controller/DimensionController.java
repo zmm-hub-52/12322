@@ -105,7 +105,7 @@ public class DimensionController {
     /**
      * 接口：POST /api/dimension/category/{categoryId}/field —— 分类下新增字段
      * 参数：categoryId 分类ID；body FieldDef（fieldKey 全局唯一、fieldName、fieldType、
-     *       required 默认必填、valueRule 取值规则、validation 校验、sortNo）。
+     *       required 默认必填、fieldRule 字段规则（取值+校验二合一）、sortNo）。
      * 返回：新建的字段。
      */
     @PostMapping("/category/{categoryId}/field")

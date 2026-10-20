@@ -41,6 +41,12 @@ public class ProcessNode extends BaseEntity {
     /** 审批节点驳回策略：back_prev 退回上一步 / back_starter 驳回到发起人 / terminate 终止流程 */
     private String rejectStrategy;
 
+    /** 处理人模式：fixed 固定（配置期指定）/ dynamic 动态（上一环节选下一人） */
+    private String assigneeMode;
+
+    /** 固定处理人（assignee_mode=fixed 时生效，存 username） */
+    private String fixedAssignee;
+
     /** 软删除 */
     @TableLogic
     private Boolean enabled;

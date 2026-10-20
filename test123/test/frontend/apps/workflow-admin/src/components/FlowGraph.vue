@@ -41,6 +41,7 @@
         class="fg-node"
         :class="{
           'fg-node--selected': ln.node.nodeKey === selectedKey,
+          'fg-node--problem': problemKeys?.includes(ln.node.nodeKey),
           'fg-node--gate': isGate(ln.node.nodeType),
           'fg-node--round': ln.node.nodeType === 'start' || ln.node.nodeType === 'end',
         }"
@@ -139,6 +140,8 @@ const props = defineProps<{
   selectedKey: string | null;
   /** 已配置字段的节点 key 集合 */
   configuredKeys?: string[];
+  /** 校验未通过的节点 key 集合（红框高亮） */
+  problemKeys?: string[];
   /** 编辑模式：显示连线中点「+」按钮 */
   editable?: boolean;
 }>();
@@ -325,6 +328,11 @@ function plusPoint(l: LaidOutLink): { x: number; y: number } {
 .fg-node--selected .node-body {
   fill: color-mix(in srgb, var(--brand-primary) 10%, var(--brand-bg));
   stroke: var(--brand-primary);
+  stroke-width: 2.5;
+}
+.fg-node--problem .node-body {
+  fill: color-mix(in srgb, var(--brand-danger) 8%, var(--brand-bg));
+  stroke: var(--brand-danger);
   stroke-width: 2.5;
 }
 .node-icon {

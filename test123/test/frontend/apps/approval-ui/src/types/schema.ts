@@ -2,29 +2,51 @@
  * approval-ui 使用端类型（与后端快照字段结构对齐）
  */
 
+/** 取值约束（单条，四选一） */
+export interface ValueRule {
+  type?: 'enum' | 'codeRange' | 'range' | 'pattern';
+  options?: string[];
+  prefix?: string;
+  start?: number;
+  end?: number;
+  width?: number;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  pattern?: string;
+  [k: string]: unknown;
+}
+
 /** 快照字段（后端 SchemaAssembler 展开后的结构） */
 export interface SchemaField {
   key: string;
   label: string;
-  type: string; // input/textarea/number/select/date/boolean
+  /** 字段描述（填写时 placeholder：字段名|字段描述） */
+  description?: string | null;
+  type: string; // input/textarea/number/select/date
   mode: 'editable' | 'readonly' | 'hidden';
   required: boolean;
-  valueRule?: {
-    type?: string;
+  /** 字段规则（取值+校验二合一） */
+  rule?: {
+    type?: 'enum' | 'codeRange' | 'range' | 'pattern' | 'requiredWhen' | 'valueWhen';
     options?: string[];
+    prefix?: string;
+    start?: number;
+    end?: number;
+    width?: number;
     min?: number;
     max?: number;
+    decimals?: number;
+    pattern?: string;
+    fieldKey?: string;
+    operator?: string;
+    value?: string;
+    cases?: { fieldKey: string; operator: string; value: string; expect: string }[];
+    /** requiredWhen 附带的内层取值约束（单条） */
+    rule?: ValueRule;
     [k: string]: unknown;
   };
-  validation?: {
-    required?: boolean;
-    minLength?: number;
-    maxLength?: number;
-    pattern?: string;
-  };
-  defaultValue?: unknown;
   placeholder?: string | null;
-  rule?: unknown;
 }
 
 /** 已发布流程（列表展示） */
@@ -43,6 +65,8 @@ export interface ProcessNodeView {
   nodeName: string;
   nodeType: string;
   rejectStrategy?: string;
+  assigneeMode?: 'fixed' | 'dynamic';
+  fixedAssignee?: string | null;
 }
 
 /** 图 */
@@ -72,6 +96,27 @@ export interface TaskView {
   createTime: string | null;
 }
 
+/** 已完结流程实例 */
+export interface FinishedInstance {
+  id: number;
+  bizNo: string | null;
+  title: string | null;
+  applicant: string | null;
+  processName: string | null;
+  createTime: string;
+  endTime: string | null;
+  status: 'finished' | 'terminated';
+}
+
+/** 下一用户任务（办理页「下一处理人」选择） */
+export interface NextNode {
+  nodeKey: string;
+  nodeName: string;
+  nodeType: string;
+  assigneeMode: 'fixed' | 'dynamic';
+  fixedAssignee?: string | null;
+}
+
 /** 当前节点 schema（办理页） */
 export interface NodeSchema {
   schemaVersion: string;
@@ -83,6 +128,8 @@ export interface NodeSchema {
   formData: Record<string, unknown>;
   finished: boolean;
   endActivityId?: string | null;
+  /** 下一用户任务列表（串行 1 个，并行多支） */
+  nextNodes?: NextNode[];
 }
 
 /** 轨迹记录 */
