@@ -1,6 +1,7 @@
 /**
  * approval-ui 使用端类型（与后端快照字段结构对齐）
  */
+import type { ExprNode } from '@platform/rule-engine';
 
 /** 取值约束（单条，四选一） */
 export interface ValueRule {
@@ -26,6 +27,7 @@ export interface SchemaField {
   type: string; // input/textarea/number/select/date
   mode: 'editable' | 'readonly' | 'hidden';
   required: boolean;
+  defaultValue?: string | null;
   /** 字段规则（取值+校验二合一） */
   rule?: {
     type?: 'enum' | 'codeRange' | 'range' | 'pattern' | 'requiredWhen' | 'valueWhen';
@@ -44,6 +46,8 @@ export interface SchemaField {
     cases?: { fieldKey: string; operator: string; value: string; expect: string }[];
     /** requiredWhen 附带的内层取值约束（单条） */
     rule?: ValueRule;
+    /** 高级规则树（type='tree' 时生效） */
+    tree?: ExprNode;
     [k: string]: unknown;
   };
   placeholder?: string | null;
@@ -65,8 +69,10 @@ export interface ProcessNodeView {
   nodeName: string;
   nodeType: string;
   rejectStrategy?: string;
-  assigneeMode?: 'fixed' | 'dynamic';
+  assigneeMode?: 'fixed' | 'dynamic' | 'role';
   fixedAssignee?: string | null;
+  roleCode?: string | null;
+  nodeMode?: 'form' | 'table';
 }
 
 /** 图 */
@@ -93,6 +99,7 @@ export interface TaskView {
   nodeKey: string;
   nodeName: string;
   nodeType: string | null;
+  claimable?: boolean;
   createTime: string | null;
 }
 
@@ -113,8 +120,9 @@ export interface NextNode {
   nodeKey: string;
   nodeName: string;
   nodeType: string;
-  assigneeMode: 'fixed' | 'dynamic';
+  assigneeMode: 'fixed' | 'dynamic' | 'role';
   fixedAssignee?: string | null;
+  roleCode?: string | null;
 }
 
 /** 当前节点 schema（办理页） */
@@ -124,9 +132,11 @@ export interface NodeSchema {
   nodeKey: string;
   nodeName?: string;
   nodeType: string | null;
+  nodeMode?: 'form' | 'table';
   fields?: SchemaField[];
   formData: Record<string, unknown>;
   finished: boolean;
+  claimable?: boolean;
   endActivityId?: string | null;
   /** 下一用户任务列表（串行 1 个，并行多支） */
   nextNodes?: NextNode[];

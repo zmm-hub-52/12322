@@ -21,6 +21,14 @@
         </span>
       </div>
 
+      <!-- 角色任务：显式领取 -->
+      <div v-if="schema.claimable && !schema.finished" class="panel ops">
+        <label class="ops__label">{{ t('detail.claimHint') }}</label>
+        <div class="ops__btns">
+          <IxButton variant="primary" :disabled="claiming" @click="doClaim">{{ t('detail.claim') }}</IxButton>
+        </div>
+      </div>
+
       <!-- 表单 -->
       <div v-if="schema.fields && schema.fields.length" class="panel">
         <FormRenderer
@@ -28,6 +36,7 @@
           v-model="formData"
           :fields="schema.fields"
           :readonly="schema.finished"
+          :mode="schema.nodeMode"
         />
       </div>
 
@@ -48,7 +57,7 @@
       </div>
 
       <!-- 审批操作区 -->
-      <div v-if="schema.nodeType === 'approval' && !schema.finished" class="panel ops">
+      <div v-if="schema.nodeType === 'approval' && !schema.finished && !schema.claimable" class="panel ops">
         <label class="ops__label">{{ t('detail.comment') }}</label>
         <textarea v-model="comment" class="ops__comment" :placeholder="t('detail.commentPh')"></textarea>
         <div class="ops__btns">
@@ -62,7 +71,7 @@
       </div>
 
       <!-- 填写节点操作区 -->
-      <div v-if="schema.nodeType === 'fill' && !schema.finished" class="panel ops">
+      <div v-if="schema.nodeType === 'fill' && !schema.finished && !schema.claimable" class="panel ops">
         <IxButton variant="primary" :disabled="acting || missingNextAssignee" @click="doSubmit">
           {{ t('detail.submit') }}
         </IxButton>
@@ -93,7 +102,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { IxButton, IxSelect, IxSelectItem } from '@platform/ui-components';
 import FormRenderer from '../../components/FormRenderer.vue';
-import { approveTask, fetchNodeSchema, fetchRecords, fetchUsers, submitTask } from '../../api';
+import { approveTask, claimTask, fetchNodeSchema, fetchRecords, fetchUsers, submitTask } from '../../api';
+import { currentUsername } from '../../composables/useCurrentUser';
 import { getFeedback } from '@platform/sdk';
 import type { NodeSchema, RecordView, UserView } from '../../types/schema';
 
@@ -106,9 +116,10 @@ const instanceId = Number(route.params.id);
 const taskId = (route.query.taskId as string) || '';
 const schema = ref<NodeSchema | null>(null);
 const records = ref<RecordView[]>([]);
-const formData = ref<Record<string, unknown>>({});
+const formData = ref<{ rows: Record<string, unknown>[] }>({ rows: [] });
 const comment = ref('');
 const acting = ref(false);
+const claiming = ref(false);
 const error = ref('');
 const userOptions = ref<UserView[]>([]);
 const nextAssignees = reactive<Record<string, string>>({});
@@ -131,7 +142,11 @@ async function load(): Promise<void> {
       fetchUsers(),
     ]);
     schema.value = s;
-    formData.value = { ...(s.formData ?? {}) };
+    formData.value = {
+      rows: Array.isArray((s.formData as { rows?: unknown })?.rows)
+        ? ((s.formData as { rows?: unknown }).rows as Record<string, unknown>[])
+        : [],
+    };
     records.value = recs;
     userOptions.value = users;
   } catch (e) {
@@ -141,12 +156,27 @@ async function load(): Promise<void> {
 
 onMounted(load);
 
+/** 领取角色候选组任务 */
+async function doClaim(): Promise<void> {
+  if (!schema.value?.taskId) return;
+  claiming.value = true;
+  try {
+    await claimTask(schema.value.taskId, currentUsername());
+    showToast({ message: t('detail.claimed') });
+    await load();
+  } catch (e) {
+    showToast({ message: (e as Error).message });
+  } finally {
+    claiming.value = false;
+  }
+}
+
 async function doSubmit(): Promise<void> {
   if (!schema.value?.taskId) return;
   if (formRef && !formRef.validate()) return;
   acting.value = true;
   try {
-    await submitTask(schema.value.taskId, { ...formData.value }, { ...nextAssignees });
+    await submitTask(schema.value.taskId, { rows: formData.value.rows }, { ...nextAssignees });
     showToast({ message: t('detail.submitted') });
     router.push('/approval/list');
   } catch (e) {
@@ -164,7 +194,7 @@ async function doApprove(approved: boolean): Promise<void> {
       schema.value.taskId,
       approved,
       comment.value || undefined,
-      { ...formData.value },
+      { rows: formData.value.rows },
       { ...nextAssignees },
     );
     showToast({ message: approved ? t('detail.approved') : t('detail.rejected') });

@@ -29,6 +29,9 @@ public class TaskViewDto {
     /** 节点类型（fill/approval） */
     private String nodeType;
 
+    /** 是否需要领取（角色候选组任务且尚未领取） */
+    private Boolean claimable;
+
     /** 任务创建时间（本地时间，与业务表 LocalDateTime 一致） */
     private LocalDateTime createTime;
 }

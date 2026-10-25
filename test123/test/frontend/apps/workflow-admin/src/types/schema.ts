@@ -1,6 +1,7 @@
 /**
  * workflow-admin 前端类型定义（与后端 field_def / process_node 等表结构对齐）
  */
+import type { ExprNode } from '@platform/rule-engine';
 
 /** 字段业务类型（中性业务语义，渲染时由前端映射 iX 组件） */
 export type FieldType = 'input' | 'textarea' | 'number' | 'select' | 'date';
@@ -21,7 +22,9 @@ export type Rule =
   /** 条件必填：触发字段满足条件时本字段必填；可选附带一条取值约束 */
   | { type: 'requiredWhen'; fieldKey: string; operator: string; value: string; rule?: ValueRule }
   /** 条件取值校验：命中第一条满足条件的 case 时，本字段必须等于 expect */
-  | { type: 'valueWhen'; cases: { fieldKey: string; operator: string; value: string; expect: string }[] };
+  | { type: 'valueWhen'; cases: { fieldKey: string; operator: string; value: string; expect: string }[] }
+  /** 高级模式：规范表达式树（运行端只认它；简单模式配置在前端编译为 tree） */
+  | { type: 'tree'; tree: ExprNode };
 
 /** 字段定义（v3：挂在维度分类下——维表第三层就是字段） */
 export interface FieldDef {
@@ -55,8 +58,14 @@ export type NodeType =
   | 'exclusiveJoin'
   | 'end';
 
-/** 审批驳回策略：back_prev 退回上一步 / back_starter 驳回到发起人 / terminate 终止流程 */
-export type RejectStrategy = 'back_prev' | 'back_starter' | 'terminate';
+/** 审批驳回策略：back_custom 回退到指定节点 / terminate 终止流程 */
+export type RejectStrategy = 'back_custom' | 'terminate';
+
+/** 处理人模式：fixed 固定 / dynamic 动态 / role 角色（显式领取） */
+export type AssigneeMode = 'fixed' | 'dynamic' | 'role';
+
+/** 节点表单展示模式：form 单笔表单 / table 多笔表格 */
+export type NodeFormMode = 'form' | 'table';
 
 /** 流程节点 */
 export interface ProcessNode {
@@ -64,12 +73,20 @@ export interface ProcessNode {
   nodeKey: string;
   nodeName: string;
   nodeType: NodeType;
-  /** 审批节点驳回策略（默认 back_prev） */
+  /** 审批节点驳回策略（默认 terminate） */
   rejectStrategy?: RejectStrategy;
-  /** 处理人模式：fixed 固定（配置期指定）/ dynamic 动态（上一环节选下一人） */
-  assigneeMode?: 'fixed' | 'dynamic';
+  /** 回退目标节点 key（back_custom 时） */
+  rejectTargetKey?: string;
+  /** 处理人模式：fixed 固定 / dynamic 动态 / role 角色（显式领取） */
+  assigneeMode?: AssigneeMode;
   /** 固定处理人 username（assigneeMode=fixed 时生效） */
   fixedAssignee?: string;
+  /** 角色 code（assigneeMode=role 时生效） */
+  roleCode?: string;
+  /** 表单展示模式：form 单笔表单 / table 多笔表格 */
+  nodeMode?: NodeFormMode;
+  /** 排他分叉节点条件配置（仅 exclusiveSplit） */
+  conditionConfig?: BranchCondition[];
 }
 
 /** 排他分支条件（可视化编辑器自动序列化，用户零表达式语言） */
@@ -83,6 +100,8 @@ export interface BranchCondition {
   value: string;
   /** 是否为默认支（所有条件都不满足时走这条） */
   isDefault?: boolean;
+  /** 高级模式：整支条件树；存在时优先于 fieldKey/operator/value */
+  tree?: ExprNode;
 }
 
 /** 流程连线（有向边，DAG） */
@@ -105,6 +124,7 @@ export interface NodeFormField {
   mode: FieldMode;
   required: boolean;
   rule?: Rule;
+  defaultValue?: string;
   placeholder?: string;
   sortNo: number;
 }

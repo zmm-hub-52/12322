@@ -42,7 +42,7 @@
         <template v-if="mode === 'form'">
           <h3 class="section-title">{{ t('start.formTitle') }}</h3>
           <div v-if="startFields.length" class="form-box">
-            <FormRenderer :ref="(el) => setFormRef(el)" v-model="formData" :fields="startFields" />
+            <FormRenderer :ref="(el) => setFormRef(el)" v-model="formData" :fields="startFields" :mode="startMode" />
           </div>
           <p v-else class="empty">{{ t('start.formEmpty') }}</p>
           <div>
@@ -121,7 +121,7 @@
  * - 动态表单：渲染 start 节点字段，填写后单条发起；
  * - Excel 导入：下载模板 → 填 Excel 上传 → 预览校验 → 逐行发起。
  */
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { IxButton, IxSelect, IxSelectItem, IxToggle } from '@platform/ui-components';
@@ -133,7 +133,7 @@ import {
   fetchPublishedDefs,
   fetchUsers,
   previewExcel,
-  startExcelRow,
+  startExcelBatch,
   startInstance,
 } from '../../api';
 import { currentUsername } from '../../composables/useCurrentUser';
@@ -159,9 +159,12 @@ const pickedDefId = ref('');
 /** 发起方式：form 动态表单 / excel 导入 */
 const mode = ref<'form' | 'excel'>('form');
 
-/** 发起表单（start 节点字段） */
+/** 发起表单（start 节点字段，即表格列） */
 const startFields = ref<SchemaField[]>([]);
-const formData = ref<Record<string, unknown>>({});
+/** start 节点展示模式：form 单笔 / table 多笔 */
+const startMode = ref<'form' | 'table'>('form');
+/** 纯表格模型：表单数据统一为 rows[] */
+const formData = ref<{ rows: Record<string, unknown>[] }>({ rows: [] });
 let formRef: InstanceType<typeof FormRenderer> | null = null;
 
 /** 发起后的第一个用户任务（串行 1 个，并行多支；需选处理人的动态节点） */
@@ -186,7 +189,7 @@ onMounted(async () => {
 
 watch(pickedDefId, async (v) => {
   preview.value = null;
-  formData.value = {};
+  formData.value = { rows: [] };
   if (!v) return;
   const defId = Number(v);
   templateUrl.value = excelTemplateUrl(defId);
@@ -199,6 +202,7 @@ watch(pickedDefId, async (v) => {
     const startNode = graph.nodes.find((n) => n.nodeType === 'start');
     const startKey = startNode?.nodeKey ?? 'start';
     startFields.value = (schema.nodes[startKey] as SchemaField[]) ?? [];
+    startMode.value = startNode?.nodeMode ?? 'form';
   } catch (e) {
     showToast({ message: (e as Error).message });
   }
@@ -255,14 +259,14 @@ async function startForm(): Promise<void> {
     await startInstance({
       processDefId: defId,
       applicant: currentUsername(),
-      bizNo: `F${Date.now().toString(36).toUpperCase()}`,
+      bizNo: 'F' + Date.now().toString(36).toUpperCase(),
       title: defs.value.find((d) => d.id === defId)?.name ?? '',
-      formData: { ...formData.value },
+      formData: { rows: formData.value.rows },
       assignees: { ...assignees },
     });
     showToast({ message: t('start.started') });
     // 留在本页：清空表单可继续发起
-    formData.value = {};
+    formData.value = { rows: [] };
   } catch (e) {
     showToast({ message: (e as Error).message });
   } finally {
@@ -301,17 +305,30 @@ async function startRow(index: number): Promise<void> {
 }
 
 /** 全部发起（校验通过且未发起的行） */
+/** 全部发起：所有校验通过且未发起的行作为一个流程实例批量发起 */
 async function startAll(): Promise<void> {
+  const rows = startableRows();
+  if (!rows.length || !pickedDefId.value) return;
   starting.value = true;
   try {
-    for (const row of startableRows()) {
-      await doStart(row, false);
-    }
+    const defId = Number(pickedDefId.value);
+    const bizNo = 'EXLB' + Date.now().toString(36).toUpperCase();
+    await startExcelBatch({
+      processDefId: defId,
+      rows: rows.map((r) => r.data),
+      applicant: currentUsername(),
+      assignees: { ...assignees },
+      bizNo,
+      title: defs.value.find((d) => d.id === defId)?.name ?? '',
+    });
+    rows.forEach((r) => (r.started = true));
+    showToast({ message: `${t('start.started')}（${rows.length} 行）` });
+  } catch (e) {
+    showToast({ message: (e as Error).message });
   } finally {
     starting.value = false;
   }
 }
-
 async function doStart(row: ImportRow, toastOnSuccess = true): Promise<void> {
   const missing = handlerNodes.value.filter((n) => !assignees[n.nodeKey]);
   if (missing.length) {
@@ -319,11 +336,11 @@ async function doStart(row: ImportRow, toastOnSuccess = true): Promise<void> {
     return;
   }
   const defId = Number(pickedDefId.value);
-  const bizNo = `EXL${Date.now().toString(36).toUpperCase()}${row.rowNo}`;
+  const bizNo = 'EXL' + Date.now().toString(36).toUpperCase() + row.rowNo;
   try {
-    await startExcelRow({
+    await startExcelBatch({
       processDefId: defId,
-      data: row.data,
+      rows: [row.data],
       applicant: currentUsername(),
       assignees: { ...assignees },
       bizNo,

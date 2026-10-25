@@ -127,7 +127,6 @@ public class ProcessConfigService {
             ld.setId(l.getId());
             ld.setFromKey(idToKey.get(l.getFromNodeId()));
             ld.setToKey(idToKey.get(l.getToNodeId()));
-            ld.setCondition(parseCondition(l.getConditionJson()));
             ld.setSortNo(l.getSortNo());
             return ld;
         }).collect(Collectors.toList()));
@@ -155,7 +154,10 @@ public class ProcessConfigService {
         for (ProcessNode n : dto.getNodes()) {
             n.setProcessDefId(defId);
             if (n.getRejectStrategy() == null) {
-                n.setRejectStrategy("back_prev");
+                n.setRejectStrategy("terminate");
+            }
+            if (n.getNodeMode() == null || n.getNodeMode().isBlank()) {
+                n.setNodeMode("form");
             }
             ProcessNode old = existingByKey.get(n.getNodeKey());
             if (old != null) {
@@ -187,7 +189,6 @@ public class ProcessConfigService {
                 link.setProcessDefId(defId);
                 link.setFromNodeId(from.getId());
                 link.setToNodeId(to.getId());
-                link.setConditionJson(toJson(l.getCondition()));
                 link.setSortNo(l.getSortNo() != null ? l.getSortNo() : i);
                 linkMapper.insert(link);
                 i++;
@@ -351,6 +352,8 @@ public class ProcessConfigService {
             m.put("type", n.getNodeType());
             m.put("assigneeMode", n.getAssigneeMode());
             m.put("fixedAssignee", n.getFixedAssignee());
+            m.put("roleCode", n.getRoleCode());
+            m.put("nodeMode", n.getNodeMode() == null ? "form" : n.getNodeMode());
             nodeList.add(m);
         }
 

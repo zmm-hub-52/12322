@@ -95,6 +95,15 @@
             <div class="col-title">
               {{ t('form.selectedFields', { node: selectedNode?.nodeName ?? '' }) }}
             </div>
+
+            <div class="rule-ops">
+              <a class="rule-op" :href="exportUrl">导出规则</a>
+              <label class="rule-op">
+                导入规则
+                <input type="file" accept=".xlsx" class="rule-op__file" @change="onImportRules" />
+              </label>
+            </div>
+
             <p v-if="!nodeFields.length" class="empty">{{ t('form.selectedEmpty') }}</p>
             <div v-for="(f, i) in nodeFields" :key="f.fieldKey" class="sel-block">
               <div class="sel-row">
@@ -124,7 +133,11 @@
               <!-- 展开：字段规则 / 提示文案 -->
               <div v-if="expandedKey === f.fieldKey" class="sel-detail">
                 <div class="sel-detail__block">
-                  <RuleEditor v-model="f.rule" :fields="ruleFields(f.fieldKey)" />
+                  <RuleEditor v-model="f.rule" :fields="allRuleFields" :field-key="f.fieldKey" :field-type="f.fieldType" />
+                </div>
+                <div class="sel-detail__row">
+                  <span class="sel-detail__label">默认值</span>
+                  <IxInput v-model="f.defaultValue" class="sel-detail__input" placeholder="留空表示无默认值" />
                 </div>
                 <div class="sel-detail__row">
                   <span class="sel-detail__label">Placeholder</span>
@@ -158,6 +171,7 @@ import { IxButton, IxInput, IxSelect, IxSelectItem, IxToggle } from '@platform/u
 import FlowGraph from '../../components/FlowGraph.vue';
 import RuleEditor from '../../components/RuleEditor.vue';
 import { useDraftStore } from '../../stores/draft';
+import { apiImportNodeRules, ruleExportUrl as apiRuleExportUrl } from '../../api';
 import {
   fetchCategories,
   fetchDimensions,
@@ -205,8 +219,37 @@ const nodeFields = ref<NodeFormField[]>([]);
 function ruleFields(selfKey: string): { key: string; label: string }[] {
   return nodeFields.value.filter((x) => x.fieldKey !== selfKey).map((x) => ({ key: x.fieldKey, label: x.fieldName }));
 }
+/** 规则编辑器字段候选：包含当前字段自身，供高级规则约束本字段 */
+const allRuleFields = computed(() =>
+  nodeFields.value.map((x) => ({ key: x.fieldKey, label: x.fieldName, type: x.fieldType })),
+);
 const expandedKey = ref('');
 const saving = ref(false);
+
+const exportUrl = computed(() => {
+  const id = selectedNode.value?.id;
+  return id && store.defId > 0 ? apiRuleExportUrl(id) : '#';
+});
+
+async function onImportRules(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const node = selectedNode.value;
+  if (!node || store.defId <= 0) {
+    toastMsg('请先保存流程后再导入规则');
+    return;
+  }
+  try {
+    await apiImportNodeRules(node.id, file);
+    toastMsg(t('form.saved'));
+    await store.loadFromServer(store.defId);
+    syncNodeFields();
+  } catch (e) {
+    toastMsg((e as Error).message);
+  }
+}
 
 const selectedNode = computed(() => nodes.value.find((n) => n.nodeKey === selectedKey.value));
 /** 表单可配置节点：start/fill/approval；网关/结束无需表单 */
@@ -322,6 +365,7 @@ function addField(def: FieldDef): void {
     mode: selectedNode.value?.nodeType === 'approval' ? 'readonly' : 'editable',
     required: def.required,
     rule: def.rule ? { ...def.rule } : undefined,
+    defaultValue: def.defaultValue ?? '',
     placeholder: def.placeholder ?? '',
     sortNo: nodeFields.value.length + 1,
   });
@@ -531,6 +575,52 @@ function goBack(): void {
   color: var(--brand-text-secondary);
 }
 
+/* 动态表格（明细表）配置区 */
+.dt-section {
+  border-bottom: 1px solid var(--brand-border);
+  padding: 10px 12px;
+  background: var(--brand-bg-secondary);
+}
+.dt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.dt-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.dt-block {
+  border: 1px solid var(--brand-border);
+  border-radius: var(--brand-radius);
+  background: var(--brand-bg);
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.dt-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rule-ops {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--brand-border);
+  background: var(--brand-bg-secondary);
+}
+.rule-op {
+  color: var(--brand-primary);
+  cursor: pointer;
+  font-size: 13px;
+  position: relative;
+}
+.rule-op__file {
+  display: none;
+}
 .field-selected {
   flex: 1;
   min-width: 0;

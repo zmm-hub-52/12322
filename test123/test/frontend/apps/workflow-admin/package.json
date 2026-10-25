@@ -10,6 +10,7 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@platform/rule-engine": "workspace:*",
     "@platform/sdk": "workspace:*",
     "@platform/ui-components": "workspace:*",
     "@platform/ui-theme": "workspace:*",

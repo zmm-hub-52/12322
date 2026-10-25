@@ -39,9 +39,13 @@ CREATE TABLE process_node (
     node_key        NVARCHAR(64)  NOT NULL,            -- 节点标识（= BPMN userTask/gateway id，表单快照 key）
     node_name       NVARCHAR(128) NOT NULL,            -- 节点名称
     node_type       NVARCHAR(16)  NOT NULL,            -- 类型：start/fill/approval/parallelSplit/parallelJoin/exclusiveSplit/exclusiveJoin/end
-    reject_strategy NVARCHAR(16)  NOT NULL DEFAULT 'back_prev', -- 审批节点驳回策略：back_prev/back_starter/terminate
-    assignee_mode   NVARCHAR(16)  NOT NULL DEFAULT 'dynamic',  -- 处理人模式：fixed 固定 / dynamic 动态（上一环节选下一人）
-    fixed_assignee  NVARCHAR(64)  NULL,                -- 固定处理人（assignee_mode=fixed 时生效，存 username）
+    reject_strategy   NVARCHAR(16)  NOT NULL DEFAULT 'terminate', -- 审批节点驳回策略：back_custom 回退指定节点 / terminate 终止
+    reject_target_key NVARCHAR(64)  NULL,                 -- 回退目标节点 key（back_custom 时）
+    assignee_mode     NVARCHAR(16)  NOT NULL DEFAULT 'dynamic',  -- 处理人模式：fixed 固定 / dynamic 动态 / role 角色（显式领取）
+    fixed_assignee    NVARCHAR(64)  NULL,                 -- 固定处理人（assignee_mode=fixed 时生效，存 username）
+    role_code         NVARCHAR(64)  NULL,                 -- 角色 code（assignee_mode=role 时生效）
+    node_mode         NVARCHAR(16)  NOT NULL DEFAULT 'form', -- 表单展示模式：form 单笔表单 / table 多笔表格
+    condition_config  NVARCHAR(MAX) NULL,                 -- 排他分叉条件配置 JSON（仅 exclusiveSplit 节点）
     enabled         BIT           NOT NULL DEFAULT 1,
     create_time     DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
     update_time     DATETIME2     NOT NULL DEFAULT SYSDATETIME()
@@ -125,6 +129,7 @@ CREATE TABLE field_def (
     field_type  NVARCHAR(32)  NOT NULL,               -- 类型：input/textarea/number/select/date/boolean
     field_rule  NVARCHAR(MAX) NULL,                   -- JSON 字段规则（取值+校验二合一）：{type:enum|codeRange|range|pattern, ...}
     required    BIT           NOT NULL DEFAULT 0,     -- 默认必填（节点可覆盖）
+    default_value NVARCHAR(500) NULL,                 -- 字段库默认值（添加字段到节点时复制）
     sort_no     INT           NOT NULL DEFAULT 0,
     enabled     BIT           NOT NULL DEFAULT 1,
     create_time DATETIME2     NOT NULL DEFAULT SYSDATETIME(),

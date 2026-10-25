@@ -71,7 +71,7 @@ export async function startInstance(payload: {
   applicant: string;
   bizNo?: string;
   title?: string;
-  formData: Record<string, unknown>;
+  formData: { rows: Record<string, unknown>[] };
   assignees: Record<string, string>;
 }): Promise<{ id: number }> {
   return unwrap<{ id: number }>(http.post('/api/instance/start', payload));
@@ -87,10 +87,15 @@ export async function fetchNodeSchema(instanceId: number, taskId?: string): Prom
   return unwrap<NodeSchema>(http.get(`/api/instance/${instanceId}/schema`, { params: { taskId } }));
 }
 
+/** 领取角色候选组任务 */
+export async function claimTask(taskId: string, username: string): Promise<void> {
+  await unwrap<unknown>(http.post('/api/task/claim', null, { params: { taskId, username } }));
+}
+
 /** 填写节点提交 */
 export async function submitTask(
   taskId: string,
-  formData: Record<string, unknown>,
+  formData: { rows: Record<string, unknown>[] },
   nextAssignees?: Record<string, string>,
 ): Promise<void> {
   await unwrap<unknown>(http.post('/api/task/submit', { taskId, formData, nextAssignees: nextAssignees ?? null }));
@@ -101,7 +106,7 @@ export async function approveTask(
   taskId: string,
   approved: boolean,
   comment?: string,
-  formData?: Record<string, unknown>,
+  formData?: { rows: Record<string, unknown>[] },
   nextAssignees?: Record<string, string>,
 ): Promise<void> {
   await unwrap<unknown>(
@@ -152,14 +157,14 @@ export async function previewExcel(defId: number, file: File): Promise<ImportPre
   return body.data;
 }
 
-/** 预览通过的行逐条发起 */
-export async function startExcelRow(payload: {
+/** 预览通过的多行数据作为一个流程实例发起 */
+export async function startExcelBatch(payload: {
   processDefId: number;
-  data: Record<string, string>;
+  rows: Record<string, string>[];
   applicant: string;
   assignees: Record<string, string>;
   bizNo: string;
   title: string;
 }): Promise<{ id: number }> {
-  return unwrap<{ id: number }>(http.post('/api/instance/excel/start', payload));
+  return unwrap<{ id: number }>(http.post('/api/instance/excel/start-batch', payload));
 }

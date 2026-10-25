@@ -38,14 +38,26 @@ public class ProcessNode extends BaseEntity {
      */
     private String nodeType;
 
-    /** 审批节点驳回策略：back_prev 退回上一步 / back_starter 驳回到发起人 / terminate 终止流程 */
+    /** 审批节点驳回策略：back_custom 回退到指定节点 / terminate 终止流程 */
     private String rejectStrategy;
 
-    /** 处理人模式：fixed 固定（配置期指定）/ dynamic 动态（上一环节选下一人） */
+    /** 回退目标节点 key（reject_strategy=back_custom 时生效） */
+    private String rejectTargetKey;
+
+    /** 处理人模式：fixed 固定（配置期指定）/ dynamic 动态（上一环节选下一人）/ role 角色（显式领取） */
     private String assigneeMode;
 
     /** 固定处理人（assignee_mode=fixed 时生效，存 username） */
     private String fixedAssignee;
+
+    /** 角色 code（assignee_mode=role 时生效） */
+    private String roleCode;
+
+    /** 表单展示模式：form 单笔表单 / table 多笔表格 */
+    private String nodeMode;
+
+    /** 排他分叉条件配置 JSON（仅 exclusiveSplit 节点使用）：[{fieldKey,fieldName,operator,value,isDefault}] */
+    private String conditionConfig;
 
     /** 软删除 */
     @TableLogic

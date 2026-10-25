@@ -51,6 +51,13 @@
             <IxSelectItem :label="t('wizard.initiatorQuality')" value="quality" />
           </IxSelect>
         </label>
+        <label class="field">
+          <span class="field__label">默认表单模式</span>
+          <IxSelect v-model="defaultNodeMode">
+            <IxSelectItem label="表单（单笔）" value="form" />
+            <IxSelectItem label="表格（多笔）" value="table" />
+          </IxSelect>
+        </label>
       </div>
     </div>
 
@@ -80,7 +87,7 @@
       </p>
       <div v-if="showValidationError && nodeProblems.names.length" class="validate-banner">
         <span class="validate-banner__title">{{ t('wizard.validateFailed') }}</span>
-        <span>{{ t('wizard.fixedAssigneeMissing', { names: nodeProblems.names.join('、') }) }}</span>
+        <span>{{ t('wizard.assigneeMissing', { names: nodeProblems.names.join('、') }) }}</span>
       </div>
       <div class="editor-wrap">
         <FlowGraph
@@ -181,37 +188,33 @@
             <IxInput v-model="popoverNode.nodeName" class="popover__rename" />
             <div class="popover__row">
               <label class="popover__label">{{ t('wizard.rejectStrategy') }}</label>
-              <template v-if="isInParallelBranch(popoverNode.nodeKey)">
-                <span class="popover__fixed">{{ t('wizard.rejectTerminate') }}</span>
-              </template>
-              <IxSelect v-else v-model="popoverNode.rejectStrategy" class="popover__select">
-                <IxSelectItem
-                  v-if="!isAfterParallelJoin(popoverNode.nodeKey)"
-                  :label="t('wizard.rejectBackPrev')"
-                  value="back_prev"
-                />
-                <IxSelectItem :label="t('wizard.rejectBackStarter')" value="back_starter" />
+              <IxSelect v-model="popoverNode.rejectStrategy" class="popover__select">
+                <IxSelectItem :label="t('wizard.rejectBackCustom')" value="back_custom" />
                 <IxSelectItem :label="t('wizard.rejectTerminate')" value="terminate" />
               </IxSelect>
             </div>
+            <div v-if="popoverNode.rejectStrategy === 'back_custom'" class="popover__row">
+              <label class="popover__label">{{ t('wizard.rejectTarget') }}</label>
+              <IxSelect v-model="popoverNode.rejectTargetKey" class="popover__select">
+                <IxSelectItem v-for="k in backTargetOptions(popoverNode.nodeKey)" :key="k" :label="nodeNameByKey(k)" :value="k" />
+              </IxSelect>
+            </div>
             <p v-if="isInParallelBranch(popoverNode.nodeKey)" class="popover__hint">
-              {{ t('wizard.parallelRejectFixed') }}
+              {{ t('wizard.parallelRejectHint') }}
             </p>
             <p v-else-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
               {{ t('wizard.afterJoinRejectHint') }}
             </p>
             <div class="popover__row">
               <label class="popover__label">{{ t('wizard.assigneeMode') }}</label>
-              <template v-if="isAfterParallelJoin(popoverNode.nodeKey)">
-                <span class="popover__fixed">{{ t('wizard.assigneeFixedMode') }}</span>
-              </template>
-              <IxSelect v-else v-model="popoverNode.assigneeMode" class="popover__select">
-                <IxSelectItem :label="t('wizard.assigneeDynamic')" value="dynamic" />
+              <IxSelect v-model="popoverNode.assigneeMode" class="popover__select">
+                <IxSelectItem v-if="!isAfterParallelJoin(popoverNode.nodeKey)" :label="t('wizard.assigneeDynamic')" value="dynamic" />
                 <IxSelectItem :label="t('wizard.assigneeFixedMode')" value="fixed" />
+                <IxSelectItem :label="t('wizard.assigneeRole')" value="role" />
               </IxSelect>
             </div>
             <p v-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
-              {{ t('wizard.afterJoinAssigneeFixed') }}
+              {{ t('wizard.afterJoinAssigneeHint') }}
             </p>
             <div v-if="popoverNode.assigneeMode === 'fixed'" class="popover__row">
               <label class="popover__label">{{ t('wizard.fixedAssignee') }}</label>
@@ -227,6 +230,22 @@
             <p v-if="popoverNode.assigneeMode === 'fixed' && !popoverNode.fixedAssignee" class="popover__error">
               {{ t('wizard.fixedAssigneeRequired') }}
             </p>
+            <div v-if="popoverNode.assigneeMode === 'role'" class="popover__row">
+              <label class="popover__label">{{ t('wizard.roleCode') }}</label>
+              <IxSelect v-model="popoverNode.roleCode" class="popover__select">
+                <IxSelectItem v-for="r in roleOptions" :key="r.code" :label="r.name" :value="r.code" />
+              </IxSelect>
+            </div>
+            <p v-if="popoverNode.assigneeMode === 'role' && !popoverNode.roleCode" class="popover__error">
+              {{ t('wizard.roleCodeRequired') }}
+            </p>
+            <div class="popover__row">
+              <label class="popover__label">表单模式</label>
+              <IxSelect v-model="popoverNode.nodeMode" class="popover__select">
+                <IxSelectItem label="表单（单笔）" value="form" />
+                <IxSelectItem label="表格（多笔）" value="table" />
+              </IxSelect>
+            </div>
             <div class="popover__actions">
               <IxButton variant="secondary" @click="moveNode(popoverNode.nodeKey, -1)">
                 {{ t('wizard.moveUp') }}
@@ -244,16 +263,14 @@
             <IxInput v-model="popoverNode.nodeName" class="popover__rename" />
             <div class="popover__row">
               <label class="popover__label">{{ t('wizard.assigneeMode') }}</label>
-              <template v-if="isAfterParallelJoin(popoverNode.nodeKey)">
-                <span class="popover__fixed">{{ t('wizard.assigneeFixedMode') }}</span>
-              </template>
-              <IxSelect v-else v-model="popoverNode.assigneeMode" class="popover__select">
-                <IxSelectItem :label="t('wizard.assigneeDynamic')" value="dynamic" />
+              <IxSelect v-model="popoverNode.assigneeMode" class="popover__select">
+                <IxSelectItem v-if="!isAfterParallelJoin(popoverNode.nodeKey)" :label="t('wizard.assigneeDynamic')" value="dynamic" />
                 <IxSelectItem :label="t('wizard.assigneeFixedMode')" value="fixed" />
+                <IxSelectItem :label="t('wizard.assigneeRole')" value="role" />
               </IxSelect>
             </div>
             <p v-if="isAfterParallelJoin(popoverNode.nodeKey)" class="popover__hint">
-              {{ t('wizard.afterJoinAssigneeFixed') }}
+              {{ t('wizard.afterJoinAssigneeHint') }}
             </p>
             <div v-if="popoverNode.assigneeMode === 'fixed'" class="popover__row">
               <label class="popover__label">{{ t('wizard.fixedAssignee') }}</label>
@@ -269,6 +286,22 @@
             <p v-if="popoverNode.assigneeMode === 'fixed' && !popoverNode.fixedAssignee" class="popover__error">
               {{ t('wizard.fixedAssigneeRequired') }}
             </p>
+            <div v-if="popoverNode.assigneeMode === 'role'" class="popover__row">
+              <label class="popover__label">{{ t('wizard.roleCode') }}</label>
+              <IxSelect v-model="popoverNode.roleCode" class="popover__select">
+                <IxSelectItem v-for="r in roleOptions" :key="r.code" :label="r.name" :value="r.code" />
+              </IxSelect>
+            </div>
+            <p v-if="popoverNode.assigneeMode === 'role' && !popoverNode.roleCode" class="popover__error">
+              {{ t('wizard.roleCodeRequired') }}
+            </p>
+            <div class="popover__row">
+              <label class="popover__label">表单模式</label>
+              <IxSelect v-model="popoverNode.nodeMode" class="popover__select">
+                <IxSelectItem label="表单（单笔）" value="form" />
+                <IxSelectItem label="表格（多笔）" value="table" />
+              </IxSelect>
+            </div>
             <div class="popover__actions">
               <IxButton variant="secondary" @click="moveNode(popoverNode.nodeKey, -1)">
                 {{ t('wizard.moveUp') }}
@@ -295,6 +328,16 @@
               {{ t('wizard.deleteParallel') }}
             </IxButton>
           </template>
+          <template v-else-if="popoverNode && popoverNode.nodeType === 'start'">
+            <div class="popover__title">开始节点</div>
+            <div class="popover__row">
+              <label class="popover__label">表单模式</label>
+              <IxSelect v-model="popoverNode.nodeMode" class="popover__select">
+                <IxSelectItem label="表单（单笔）" value="form" />
+                <IxSelectItem label="表格（多笔）" value="table" />
+              </IxSelect>
+            </div>
+          </template>
           <template v-else>
             <div class="popover__title">{{ popoverNode?.nodeName ?? '' }}</div>
             <p class="popover__hint">{{ t('wizard.fixedNodeHint') }}</p>
@@ -320,10 +363,14 @@
         <!-- 每支线一个条件行：字段 / 比较符 / 值 / 设为默认 -->
         <div v-for="(cond, i) in exclusiveModal.conditions" :key="i" class="cond-row">
           <span class="cond-row__no">{{ t('wizard.condBranch', { n: i + 1 }) }}</span>
-          <IxSelect v-model="cond.fieldKey" class="cond-row__field">
+          <IxSelect v-model="exclusiveModal.branchTypes[i]" class="cond-row__type">
+            <IxSelectItem :label="t('wizard.nodeTypeFill')" value="fill" />
+            <IxSelectItem :label="t('wizard.nodeTypeApproval')" value="approval" />
+          </IxSelect>
+          <IxSelect v-model="cond.fieldKey" class="cond-row__field" :disabled="exclusiveModal.defaultBranch === String(i)">
             <IxSelectItem v-for="f in fieldOptions" :key="f.fieldKey" :label="f.fieldName" :value="f.fieldKey" />
           </IxSelect>
-          <IxSelect v-model="cond.operator" class="cond-row__op">
+          <IxSelect v-model="cond.operator" class="cond-row__op" :disabled="exclusiveModal.defaultBranch === String(i)">
             <IxSelectItem
               v-for="op in operatorsFor(condFieldType(cond))"
               :key="op.value"
@@ -331,7 +378,7 @@
               :value="op.value"
             />
           </IxSelect>
-          <IxInput v-model="cond.value" class="cond-row__value" :placeholder="t('wizard.condValuePh')" />
+          <IxInput v-model="cond.value" class="cond-row__value" :disabled="exclusiveModal.defaultBranch === String(i)" :placeholder="t('wizard.condValuePh')" />
           <label class="cond-row__default">
             <input
               type="radio"
@@ -424,6 +471,8 @@ const publishing = ref(false);
 const selectedTemplateKey = ref('');
 /** 当前已套用的模板 key（重新选不同模板时重新套用） */
 const appliedTemplateKey = ref('');
+/** 新建向导里的流程级默认模式（仅 UI 默认值，不落库；保存时写入各节点 nodeMode） */
+const defaultNodeMode = ref<'form' | 'table'>('form');
 
 // ---- 画布 UI 状态（本地；图数据在 store） ----
 const selectedNodeKey = ref<string | null>(null);
@@ -449,6 +498,7 @@ const exclusiveModal = ref<{
   fromKey: string;
   toKey: string;
   branchCount: string;
+  branchTypes: ('fill' | 'approval')[];
   conditions: { fieldKey: string; operator: string; value: string }[];
   defaultBranch: string;
   editingKey?: string;
@@ -459,6 +509,13 @@ const fieldOptions = ref<FieldDef[]>([]);
 
 /** 用户选项（固定处理人选择） */
 const userOptions = ref<{ username: string; name: string }[]>([]);
+const roleOptions = [
+  { code: 'admin', name: '系统管理员' },
+  { code: 'buyer', name: '采购员' },
+  { code: 'manager', name: '部门经理' },
+  { code: 'finance', name: '财务' },
+  { code: 'quality', name: '质量工程师' },
+];
 
 /** 分支数变化时调整条件行数量 */
 watch(
@@ -469,6 +526,8 @@ watch(
     const count = Number(n) || 2;
     while (m.conditions.length < count) m.conditions.push({ fieldKey: '', operator: 'gt', value: '' });
     if (m.conditions.length > count) m.conditions.length = count;
+    while (m.branchTypes.length < count) m.branchTypes.push('approval');
+    if (m.branchTypes.length > count) m.branchTypes.length = count;
     if (Number(m.defaultBranch) >= count) m.defaultBranch = String(count - 1);
   },
 );
@@ -485,7 +544,7 @@ watch(
   },
 );
 
-/** 节点表单配置完成度（派生自 store.nodeFields）：nodeKey -> 已配置字段数 */
+/** 节点表格列配置完成度：nodeKey -> 已配置列数 */
 const formCounts = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {};
   for (const n of nodes.value) {
@@ -538,7 +597,9 @@ const unconfiguredFills = computed(() =>
 /** 节点级校验问题（固定处理人未指定人员等），供第三步「下一步」与发布前校验复用 */
 function collectNodeProblems(): { keys: string[]; names: string[] } {
   const bad = nodes.value.filter(
-    (n) => (n.nodeType === 'fill' || n.nodeType === 'approval') && n.assigneeMode === 'fixed' && !n.fixedAssignee,
+    (n) =>
+      (n.nodeType === 'fill' || n.nodeType === 'approval') &&
+      ((n.assigneeMode === 'fixed' && !n.fixedAssignee) || (n.assigneeMode === 'role' && !n.roleCode)),
   );
   return { keys: bad.map((n) => n.nodeKey), names: bad.map((n) => n.nodeName) };
 }
@@ -584,7 +645,7 @@ async function onNext(): Promise<void> {
       }
       nodeSeq = 0;
       linkSeq = 0;
-      nodes.value = tp.nodes.map((n, i) => ({ ...n, id: i + 1 }));
+      nodes.value = tp.nodes.map((n, i) => ({ ...n, id: i + 1, nodeMode: defaultNodeMode.value }));
       links.value = tp.links.map((l, i) => ({ ...l, id: i + 1 }));
       store.nodeFields = {};
       appliedTemplateKey.value = tp.key;
@@ -618,17 +679,17 @@ function onSelectNode(key: string, event: MouseEvent): void {
   selectedNodeKey.value = key;
   const node = nodes.value.find((n) => n.nodeKey === key);
   if (node?.nodeType === 'approval' && !node.rejectStrategy) {
-    node.rejectStrategy = 'back_prev';
+    node.rejectStrategy = 'terminate';
   }
   if (node && (node.nodeType === 'fill' || node.nodeType === 'approval') && !node.assigneeMode) {
     node.assigneeMode = 'dynamic';
   }
+  if (node && (node.nodeType === 'start' || node.nodeType === 'fill' || node.nodeType === 'approval') && !node.nodeMode) {
+    node.nodeMode = defaultNodeMode.value;
+  }
   // 并行相关约束（与后端 publish 校验一致）
   if (node) {
     if (node.nodeType === 'approval' && isInParallelBranch(node.nodeKey)) {
-      node.rejectStrategy = 'terminate';
-    }
-    if (node.nodeType === 'approval' && isAfterParallelJoin(node.nodeKey) && node.rejectStrategy === 'back_prev') {
       node.rejectStrategy = 'terminate';
     }
     if ((node.nodeType === 'fill' || node.nodeType === 'approval') && isAfterParallelJoin(node.nodeKey)) {
@@ -719,18 +780,14 @@ function openBranchEdit(splitKey: string): void {
       editingKey: splitKey,
     };
   } else if (node.nodeType === 'exclusiveSplit') {
-    const conds = links.value
-      .filter((l) => l.fromKey === splitKey)
-      .map((l) =>
-        l.condition
-          ? { fieldKey: l.condition.fieldKey ?? '', operator: l.condition.operator ?? 'eq', value: l.condition.value ?? '' }
-          : { fieldKey: '', operator: 'eq', value: '' },
-      );
-    const defaultIdx = links.value.filter((l) => l.fromKey === splitKey).findIndex((l) => l.condition?.isDefault);
+    const cfg = node.conditionConfig ?? [];
+    const conds = cfg.map((c) => ({ fieldKey: c.fieldKey ?? '', operator: c.operator ?? 'eq', value: c.value ?? '' }));
+    const defaultIdx = cfg.findIndex((c) => c.isDefault);
     exclusiveModal.value = {
       fromKey: info.fromKey,
       toKey: info.toKey,
       branchCount: String(info.branches.length),
+      branchTypes: info.branches.map((b) => (b.nodeType === 'approval' ? 'approval' : 'fill')),
       conditions: conds,
       defaultBranch: String(defaultIdx >= 0 ? defaultIdx : Math.max(0, conds.length - 1)),
       editingKey: splitKey,
@@ -738,8 +795,13 @@ function openBranchEdit(splitKey: string): void {
   }
 }
 
-/** 节点是否位于并行分支内（反向回溯遇 parallelSplit）——并行分支驳回策略固定为终止 */
+/** 节点是否位于并行分支内（反向回溯遇 parallelSplit） */
 function isInParallelBranch(nodeKey: string): boolean {
+  return parallelSplitOf(nodeKey) !== null;
+}
+
+/** 反向回溯遇到的第一个 parallelSplit（跨 userTask 与网关；先遇 start/多前驱返回 null） */
+function parallelSplitOf(nodeKey: string): string | null {
   const byKey = new Map(nodes.value.map((n) => [n.nodeKey, n] as const));
   const inLinks = new Map<string, string[]>();
   for (const l of links.value) {
@@ -752,14 +814,14 @@ function isInParallelBranch(nodeKey: string): boolean {
   while (cur && !visited.has(cur)) {
     visited.add(cur);
     const ins = inLinks.get(cur) ?? [];
-    if (ins.length !== 1) return false;
+    if (ins.length !== 1) return null;
     const prev = byKey.get(ins[0]);
-    if (!prev) return false;
-    if (prev.nodeType === 'parallelSplit') return true;
-    if (prev.nodeType === 'start') return false;
+    if (!prev) return null;
+    if (prev.nodeType === 'parallelSplit') return prev.nodeKey;
+    if (prev.nodeType === 'start') return null;
     cur = prev.nodeKey; // fill/approval/网关继续回溯（跨过 userTask，覆盖分支内所有用户任务）
   }
-  return false;
+  return null;
 }
 
 /** 节点是否为「并行汇合后的第一个用户任务」（反向只跨网关，先遇 parallelJoin 则 true） */
@@ -788,6 +850,41 @@ function isAfterParallelJoin(nodeKey: string): boolean {
     )
       return false;
     cur = prev.nodeKey; // 其它网关继续
+  }
+  return false;
+}
+
+/** 可回退目标：位于当前节点之前；分支内限本分支，分支外不能落在并行分支内 */
+function backTargetOptions(nodeKey: string): string[] {
+  const selfSplit = parallelSplitOf(nodeKey);
+  return nodes.value
+    .filter((n) => n.nodeType === 'fill' || n.nodeType === 'approval')
+    .filter((n) => n.nodeKey !== nodeKey)
+    .filter((n) => canReach(n.nodeKey, nodeKey))
+    .filter((n) => (selfSplit ? parallelSplitOf(n.nodeKey) === selfSplit : !isInParallelBranch(n.nodeKey)))
+    .map((n) => n.nodeKey);
+}
+
+function nodeNameByKey(key: string): string {
+  return nodes.value.find((n) => n.nodeKey === key)?.nodeName ?? key;
+}
+
+function canReach(fromKey: string, toKey: string): boolean {
+  if (fromKey === toKey) return false;
+  const out = new Map<string, string[]>();
+  for (const l of links.value) {
+    const arr = out.get(l.fromKey) ?? [];
+    arr.push(l.toKey);
+    out.set(l.fromKey, arr);
+  }
+  const queue = [fromKey];
+  const visited = new Set<string>();
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    if (cur === toKey) return true;
+    for (const nx of out.get(cur) ?? []) queue.push(nx);
   }
   return false;
 }
@@ -846,6 +943,7 @@ function addNodeBetween(fromKey: string, toKey: string, type: 'fill' | 'approval
     nodeKey: nextNodeKey(type),
     nodeName: type === 'fill' ? `填写节点 ${count}` : `审批节点 ${count}`,
     nodeType: type,
+    nodeMode: defaultNodeMode.value,
   };
   const li = links.value.findIndex((l) => l.fromKey === fromKey && l.toKey === toKey);
   if (li < 0) {
@@ -914,6 +1012,7 @@ function confirmParallel(): void {
       nodeName: branchType === 'fill' ? `并行填写 ${b}` : `并行审批 ${b}`,
       nodeType: branchType,
       rejectStrategy: branchType === 'approval' ? 'terminate' : undefined,
+      nodeMode: defaultNodeMode.value,
     };
     links.value.push({ id: ++linkSeq, fromKey: split.nodeKey, toKey: branchNode.nodeKey });
     links.value.push({ id: ++linkSeq, fromKey: branchNode.nodeKey, toKey: join.nodeKey });
@@ -930,6 +1029,7 @@ function openExclusiveModal(fromKey: string, toKey: string): void {
     fromKey,
     toKey,
     branchCount: '2',
+    branchTypes: ['approval', 'approval'],
     conditions: [
       { fieldKey: '', operator: 'gt', value: '' },
       { fieldKey: '', operator: 'eq', value: '' },
@@ -968,6 +1068,16 @@ function confirmExclusive(): void {
     nodeName: '排他分叉',
     nodeType: 'exclusiveSplit',
   };
+  split.conditionConfig = modal.conditions.map((cond, i) => {
+    const isDefault = String(i) === modal.defaultBranch;
+    return {
+      fieldKey: isDefault ? '' : cond.fieldKey,
+      fieldName: isDefault ? '' : (fieldOptions.value.find((f) => f.fieldKey === cond.fieldKey)?.fieldName ?? ''),
+      operator: isDefault ? '' : cond.operator,
+      value: isDefault ? '' : cond.value,
+      isDefault,
+    };
+  });
   nodeSeq += 1;
   const join: ProcessNode = {
     id: -nodeSeq,
@@ -979,24 +1089,18 @@ function confirmExclusive(): void {
   links.value.push({ id: ++linkSeq, fromKey: join.nodeKey, toKey });
 
   for (let b = 0; b < branchCount; b++) {
-    const cond = modal.conditions[b] ?? { fieldKey: '', operator: 'eq', value: '' };
+    const branchType = modal.branchTypes[b] ?? 'approval';
     const isDefault = String(b) === modal.defaultBranch;
-    const fieldName = fieldOptions.value.find((f) => f.fieldKey === cond.fieldKey)?.fieldName ?? '';
     nodeSeq += 1;
     const branchNode: ProcessNode = {
       id: -nodeSeq,
-      nodeKey: nextNodeKey('xbranch'),
-      nodeName: isDefault ? `条件分支 ${b + 1}（默认）` : `条件分支 ${b + 1}`,
-      nodeType: 'approval',
+      nodeKey: nextNodeKey(branchType),
+      nodeName: branchType === 'fill' ? `条件填写 ${b + 1}` : `条件审批 ${b + 1}`,
+      nodeType: branchType,
+      rejectStrategy: branchType === 'approval' ? 'terminate' : undefined,
+      nodeMode: defaultNodeMode.value,
     };
-    links.value.push({
-      id: ++linkSeq,
-      fromKey: split.nodeKey,
-      toKey: branchNode.nodeKey,
-      condition: isDefault
-        ? { fieldKey: '', fieldName: '', operator: '', value: '', isDefault: true }
-        : { fieldKey: cond.fieldKey, fieldName, operator: cond.operator, value: cond.value },
-    });
+    links.value.push({ id: ++linkSeq, fromKey: split.nodeKey, toKey: branchNode.nodeKey, sortNo: b });
     links.value.push({ id: ++linkSeq, fromKey: branchNode.nodeKey, toKey: join.nodeKey });
     nodes.value.push(branchNode);
   }
@@ -1172,15 +1276,19 @@ function goFormConfig(node: ProcessNode): void {
 
 /** 保存草稿：整个内存草稿一次落盘（图 + 基本信息 + 全部节点字段） */
 async function saveDraft(): Promise<void> {
-  await store.saveToServer();
-  toastMsg(t('wizard.saved'));
+  try {
+    await store.saveToServer();
+    toastMsg(t('wizard.saved'));
+  } catch (e) {
+    toastMsg(t('wizard.saveFailed', { msg: (e as Error)?.message ?? '' }));
+  }
 }
 
 /** 发布：先落盘再发布（后端版本+1+快照+BPMN 部署） */
 async function publish(): Promise<void> {
   const problems = collectNodeProblems();
   if (problems.names.length) {
-    toastMsg(t('wizard.fixedAssigneeMissing', { names: problems.names.join('、') }));
+    toastMsg(t('wizard.assigneeMissing', { names: problems.names.join('、') }));
     return;
   }
   publishing.value = true;
@@ -1188,6 +1296,8 @@ async function publish(): Promise<void> {
     const version = await store.publish();
     toastMsg(t('wizard.published', { version }));
     goBack();
+  } catch (e) {
+    toastMsg(t('wizard.publishFailed', { msg: (e as Error)?.message ?? '' }));
   } finally {
     publishing.value = false;
   }

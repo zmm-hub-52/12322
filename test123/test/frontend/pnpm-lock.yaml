@@ -10,6 +10,9 @@ importers:
 
   apps/approval-ui:
     dependencies:
+      '@platform/rule-engine':
+        specifier: workspace:*
+        version: link:../../packages/rule-engine
       '@platform/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -102,6 +105,9 @@ importers:
 
   apps/workflow-admin:
     dependencies:
+      '@platform/rule-engine':
+        specifier: workspace:*
+        version: link:../../packages/rule-engine
       '@platform/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -145,6 +151,14 @@ importers:
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.7.3)
+
+  packages/api-rule:
+    dependencies:
+      '@platform/rule-engine':
+        specifier: workspace:*
+        version: link:../rule-engine
+
+  packages/rule-engine: {}
 
   packages/sdk:
     dependencies:

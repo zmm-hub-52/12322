@@ -8,15 +8,16 @@
  *    本层做适配映射，页面/组件零改动。
  */
 
-import type { AxiosResponse } from 'axios';
-import { createSubAppHttp } from '@platform/sdk';
 import type {
+  BranchCondition,
   FieldDef,
   NodeFormField,
   ProcessDef,
   ProcessLink,
   ProcessNode,
 } from '../types/schema';
+import { createSubAppHttp } from '@platform/sdk';
+import type { AxiosResponse } from 'axios';
 
 /** 后端服务地址（开发期直连；生产走网关） */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
@@ -62,8 +63,12 @@ interface ApiProcessNode {
   nodeName: string;
   nodeType: string;
   rejectStrategy: string | null;
+  rejectTargetKey: string | null;
   assigneeMode: string | null;
   fixedAssignee: string | null;
+  roleCode: string | null;
+  nodeMode: string | null;
+  conditionConfig: string | null;
   enabled: boolean;
 }
 
@@ -90,6 +95,7 @@ interface ApiFieldDef {
   fieldType: string;
   fieldRule: string | null;
   required: boolean;
+  defaultValue: string | null;
   sortNo: number;
   enabled: boolean;
 }
@@ -155,9 +161,13 @@ function adaptNode(a: ApiProcessNode): ProcessNode {
     nodeKey: a.nodeKey,
     nodeName: a.nodeName,
     nodeType: a.nodeType as ProcessNode['nodeType'],
-    rejectStrategy: (a.rejectStrategy ?? 'back_prev') as ProcessNode['rejectStrategy'],
+    rejectStrategy: (a.rejectStrategy ?? 'terminate') as ProcessNode['rejectStrategy'],
+    rejectTargetKey: a.rejectTargetKey ?? undefined,
     assigneeMode: (a.assigneeMode ?? 'dynamic') as ProcessNode['assigneeMode'],
     fixedAssignee: a.fixedAssignee ?? undefined,
+    roleCode: a.roleCode ?? undefined,
+    nodeMode: (a.nodeMode ?? 'form') as ProcessNode['nodeMode'],
+    conditionConfig: parseJson<BranchCondition[]>(a.conditionConfig) ?? undefined,
   };
 }
 
@@ -189,6 +199,7 @@ function adaptFieldDef(a: ApiFieldDef): FieldDef {
     description: a.description ?? undefined,
     fieldType: a.fieldType as FieldDef['fieldType'],
     required: a.required,
+    defaultValue: a.defaultValue ?? undefined,
     rule: parseJson(a.fieldRule),
     enabled: a.enabled,
   };
@@ -223,9 +234,13 @@ export async function apiSaveGraph(
         nodeKey: n.nodeKey,
         nodeName: n.nodeName,
         nodeType: n.nodeType,
-        rejectStrategy: n.rejectStrategy ?? 'back_prev',
+        rejectStrategy: n.rejectStrategy ?? 'terminate',
+        rejectTargetKey: n.rejectTargetKey ?? null,
         assigneeMode: n.assigneeMode ?? 'dynamic',
         fixedAssignee: n.fixedAssignee ?? null,
+        roleCode: n.roleCode ?? null,
+        nodeMode: n.nodeMode ?? 'form',
+        conditionConfig: n.conditionConfig ? JSON.stringify(n.conditionConfig) : null,
       })),
       links: links.map((l) => ({
         fromKey: l.fromKey,
@@ -342,6 +357,7 @@ export async function apiCreateField(
     description?: string;
     fieldType: string;
     required: boolean;
+    defaultValue?: string;
     rule?: unknown;
   },
 ): Promise<void> {
@@ -352,6 +368,7 @@ export async function apiCreateField(
       description: input.description ?? null,
       fieldType: input.fieldType,
       required: input.required,
+      defaultValue: input.defaultValue ?? null,
       fieldRule: input.rule ? JSON.stringify(input.rule) : null,
     }),
   );
@@ -361,7 +378,7 @@ export async function apiCreateField(
 /** 更新字段（fieldKey 不可改） */
 export async function apiUpdateField(
   id: number,
-  input: { fieldName: string; description?: string; fieldType: string; required: boolean; rule?: unknown },
+  input: { fieldName: string; description?: string; fieldType: string; required: boolean; defaultValue?: string; rule?: unknown },
 ): Promise<void> {
   await unwrap<unknown>(
     http.put(`/api/field/${id}`, {
@@ -369,6 +386,7 @@ export async function apiUpdateField(
       description: input.description ?? null,
       fieldType: input.fieldType,
       required: input.required,
+      defaultValue: input.defaultValue ?? null,
       fieldRule: input.rule ? JSON.stringify(input.rule) : null,
     }),
   );
@@ -395,7 +413,7 @@ export async function apiListNodeFields(defId: number, nodeKey: string): Promise
 
   return (raws ?? []).map((r) => {
     const def = libByKey.get(r.fieldKey);
-    const override = parseJson<{ required?: boolean; rule?: unknown }>(r.override);
+    const override = parseJson<{ required?: boolean; rule?: unknown; defaultValue?: string }>(r.override);
     return {
       id: r.id,
       fieldKey: r.fieldKey,
@@ -404,6 +422,7 @@ export async function apiListNodeFields(defId: number, nodeKey: string): Promise
       mode: (r.mode ?? 'editable') as NodeFormField['mode'],
       required: override?.required ?? def?.required ?? false,
       rule: (override?.rule as NodeFormField['rule']) ?? def?.rule,
+      defaultValue: override?.defaultValue ?? def?.defaultValue,
       placeholder: def?.placeholder,
       sortNo: r.orderNo ?? 0,
     };
@@ -427,6 +446,7 @@ export async function apiSaveNodeFields(
     const override = JSON.stringify({
       required: f.required,
       rule: f.rule,
+      defaultValue: f.defaultValue,
     });
     const old = existingByKey.get(f.fieldKey);
     if (old) {
@@ -454,6 +474,24 @@ export async function apiSaveNodeFields(
   for (const left of existingByKey.values()) {
     await unwrap<unknown>(http.delete(`/api/process/fields/${left.id}`));
   }
+}
+
+// ==================== 规则导入 / 导出 ====================
+
+/** 当前节点规则导出下载地址 */
+export function ruleExportUrl(nodeId: number): string {
+  return API_BASE_URL + '/api/process/nodes/' + nodeId + '/rules/export';
+}
+
+/** 上传规则 Excel 覆盖当前节点已选字段规则 */
+export async function apiImportNodeRules(nodeId: number, file: File): Promise<void> {
+  const form = new FormData();
+  form.append('file', file);
+  await unwrap<unknown>(
+    http.post(`/api/process/nodes/${nodeId}/rules/import`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  );
 }
 
 // ==================== 维表 ====================

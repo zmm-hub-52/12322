@@ -1,16 +1,10 @@
 <template>
   <div class="rule-editor">
-    <!-- 规则类型（取值 + 校验 二合一） -->
+    <!-- 规则类型决定编辑页面 -->
     <div class="vr-row">
       <label class="vr-label">{{ t('rule.typeLabel') }}</label>
       <IxSelect v-model="ruleType" class="vr-type">
-        <IxSelectItem :label="t('rule.none')" value="none" />
-        <IxSelectItem :label="t('rule.enum')" value="enum" />
-        <IxSelectItem :label="t('rule.codeRange')" value="codeRange" />
-        <IxSelectItem :label="t('rule.range')" value="range" />
-        <IxSelectItem :label="t('rule.pattern')" value="pattern" />
-        <IxSelectItem v-if="hasFields" :label="t('rule.requiredWhen')" value="requiredWhen" />
-        <IxSelectItem v-if="hasFields" :label="t('rule.valueWhen')" value="valueWhen" />
+        <IxSelectItem v-for="opt in availableTypes" :key="opt.value" :label="opt.label" :value="opt.value" />
       </IxSelect>
     </div>
 
@@ -136,26 +130,14 @@
       </div>
     </template>
 
-    <!-- 条件取值校验：命中第一条满足条件的 case 时本字段必须等于 expect -->
+    <!-- 条件取值校验：决策表编辑 -->
     <template v-else-if="ruleType === 'valueWhen'">
-      <div v-for="(c, i) in valueWhenCases" :key="i" class="vr-row">
-        <label class="vr-label">{{ t('rule.whenField') }}</label>
-        <IxSelect v-model="c.fieldKey" class="vr-field">
-          <IxSelectItem v-for="f in fieldOptions" :key="f.key" :label="f.label" :value="f.key" />
-        </IxSelect>
-        <label class="vr-label vr-label--gap">{{ t('rule.operator') }}</label>
-        <IxSelect v-model="c.operator" class="vr-op">
-          <IxSelectItem v-for="op in operators" :key="op" :label="opLabel(op)" :value="op" />
-        </IxSelect>
-        <label v-if="!isNoValue(c.operator)" class="vr-label vr-label--gap">{{ t('rule.whenValue') }}</label>
-        <IxInput v-if="!isNoValue(c.operator)" v-model="c.value" class="vr-small" />
-        <label class="vr-label vr-label--gap">{{ t('rule.expect') }}</label>
-        <IxInput v-model="c.expect" class="vr-small" />
-        <IxButton variant="secondary" @click="removeCase(i)">×</IxButton>
-      </div>
-      <div class="vr-row">
-        <IxButton variant="secondary" @click="addCase">{{ t('rule.addCase') }}</IxButton>
-      </div>
+      <DecisionTableEditor v-model="valueWhenCases" :fields="fieldOptions" />
+    </template>
+
+    <!-- 高级模式：表达式树 -->
+    <template v-else>
+      <QueryBuilderRuleEditor v-model="advancedTree" :fields="fieldOptions" />
     </template>
   </div>
 </template>
@@ -175,9 +157,13 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { IxButton, IxInput, IxSelect, IxSelectItem } from '@platform/ui-components';
+import { and, type ExprNode } from '@platform/rule-engine';
+import { compileFieldRule } from '../utils/ruleTree';
+import QueryBuilderRuleEditor from './QueryBuilderRuleEditor.vue';
+import DecisionTableEditor from './DecisionTableEditor.vue';
 import type { Rule, ValueRule } from '../types/schema';
 
-type RuleType = 'none' | 'enum' | 'codeRange' | 'range' | 'pattern' | 'requiredWhen' | 'valueWhen';
+type RuleType = 'none' | 'enum' | 'codeRange' | 'range' | 'pattern' | 'requiredWhen' | 'valueWhen' | 'tree';
 
 /** 常用正则预设 */
 const PRESET_PATTERNS = {
@@ -193,6 +179,10 @@ const props = defineProps<{
   modelValue?: Rule;
   /** 同表单的其它字段（条件规则触发字段候选；字段库级不传） */
   fields?: { key: string; label: string }[];
+  /** 当前字段 key：高级模式初始树需要 selfKey（form/index.vue 会传） */
+  fieldKey?: string;
+  /** 当前字段类型：用于约束可选的规则类型 */
+  fieldType?: string;
 }>();
 
 const emit = defineEmits<{
@@ -201,8 +191,36 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
+/** 高级规则树；恒真哨兵统一换成空 and 组，便于继续添加条件 */
+const advancedTree = ref<ExprNode>(and());
+
 const fieldOptions = computed(() => props.fields ?? []);
 const hasFields = computed(() => fieldOptions.value.length > 0);
+
+type RuleTypeOption = { value: RuleType; label: string };
+const availableTypes = computed<RuleTypeOption[]>(() => {
+  const ft = props.fieldType ?? 'input';
+  const base: RuleTypeOption[] = [{ value: 'none', label: t('rule.none') }];
+  if (ft === 'select') {
+    base.push({ value: 'enum', label: t('rule.enum') });
+    base.push({ value: 'valueWhen', label: t('rule.valueWhen') });
+  } else if (ft === 'number') {
+    base.push({ value: 'range', label: t('rule.range') });
+    base.push({ value: 'requiredWhen', label: t('rule.requiredWhen') });
+    base.push({ value: 'valueWhen', label: t('rule.valueWhen') });
+  } else if (ft === 'input' || ft === 'textarea') {
+    base.push({ value: 'codeRange', label: t('rule.codeRange') });
+    base.push({ value: 'pattern', label: t('rule.pattern') });
+    base.push({ value: 'requiredWhen', label: t('rule.requiredWhen') });
+    base.push({ value: 'valueWhen', label: t('rule.valueWhen') });
+  } else {
+    base.push({ value: 'pattern', label: t('rule.pattern') });
+    base.push({ value: 'requiredWhen', label: t('rule.requiredWhen') });
+    base.push({ value: 'valueWhen', label: t('rule.valueWhen') });
+  }
+  base.push({ value: 'tree', label: t('rule.advancedMode') });
+  return base;
+});
 
 const operators = ['eq', 'neq', 'contains', 'isEmpty', 'isNotEmpty', 'gt', 'gte', 'lt', 'lte'] as const;
 
@@ -266,8 +284,8 @@ const innerRule = computed<ValueRule | undefined>(() => {
   }
 });
 
-// ---- 规则 = 内部状态的纯派生 ----
-const rule = computed<Rule | undefined>(() => {
+// ---- 简单模式规则 = 内部状态的纯派生 ----
+const simpleRule = computed<Rule | undefined>(() => {
   switch (ruleType.value) {
     case 'enum':
       return { type: 'enum', options: [...enumOptions.value] };
@@ -304,6 +322,31 @@ const rule = computed<Rule | undefined>(() => {
   }
 });
 
+// ---- 最终规则：规则类型决定输出 ----
+const rule = computed<Rule | undefined>(() => {
+  if (ruleType.value === 'tree') {
+    return advancedTree.value ? { type: 'tree', tree: advancedTree.value } : undefined;
+  }
+  return simpleRule.value;
+});
+
+// ---- 切到高级规则时，从空条件组开始，不带入其它规则 ----
+watch(
+  ruleType,
+  (t) => {
+    if (t === 'tree') {
+      advancedTree.value = and();
+    }
+  },
+  { flush: 'sync' },
+);
+
+function normalizeTreeForEditor(tree: ExprNode): ExprNode {
+  // 无规则时 compileFieldRule 返回 constant(true)，编辑器里换成空 and 组
+  if (tree.kind === 'const' && tree.value === true) return and();
+  return tree;
+}
+
 // ---- 派生值变化 → emit（唯一一个 emit watch） ----
 watch(rule, (v) => emit('update:modelValue', v), { deep: true });
 
@@ -318,6 +361,11 @@ watch(
 );
 
 function applyModel(val: Rule | undefined): void {
+  if (val?.type === 'tree') {
+    ruleType.value = 'tree';
+    advancedTree.value = val.tree;
+    return;
+  }
   if (!val) {
     ruleType.value = 'none';
     return;

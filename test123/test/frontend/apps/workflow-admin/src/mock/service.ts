@@ -111,6 +111,7 @@ export async function createField(
     description?: string;
     fieldType: FieldDef['fieldType'];
     required: boolean;
+    defaultValue?: string;
     rule?: FieldDef['rule'];
   },
 ): Promise<void> {
@@ -125,6 +126,7 @@ export async function updateField(
     description?: string;
     fieldType: FieldDef['fieldType'];
     required: boolean;
+    defaultValue?: string;
     rule?: FieldDef['rule'];
   },
 ): Promise<void> {

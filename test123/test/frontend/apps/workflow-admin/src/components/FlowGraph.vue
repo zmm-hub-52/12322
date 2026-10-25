@@ -208,9 +208,9 @@ function typeText(type: NodeType): string {
 
 /** 审批节点驳回策略后缀（画布徽标） */
 function rejectSuffix(node: ProcessNode): string {
-  if (node.nodeType !== 'approval' || !node.rejectStrategy || node.rejectStrategy === 'back_prev') return '';
+  if (node.nodeType !== 'approval' || !node.rejectStrategy) return '';
   const map: Record<string, string> = {
-    back_starter: 'wizard.rejectStarterShort',
+    back_custom: 'wizard.rejectCustomShort',
     terminate: 'wizard.rejectTerminateShort',
   };
   return ` · ${t(map[node.rejectStrategy] ?? 'wizard.rejectTerminateShort')}`;
@@ -218,7 +218,13 @@ function rejectSuffix(node: ProcessNode): string {
 
 /** 某条边上的条件（来自原始 links） */
 function condOf(l: LaidOutLink): BranchCondition | undefined {
-  return props.links.find((x) => x.fromKey === l.fromKey && x.toKey === l.toKey)?.condition;
+  const from = props.nodes.find((n) => n.nodeKey === l.fromKey);
+  if (!from || from.nodeType !== 'exclusiveSplit' || !from.conditionConfig) return undefined;
+  const outs = props.links
+    .filter((x) => x.fromKey === l.fromKey)
+    .sort((a, b) => (a.sortNo ?? 0) - (b.sortNo ?? 0));
+  const idx = outs.findIndex((x) => x.toKey === l.toKey);
+  return idx >= 0 ? from.conditionConfig[idx] : undefined;
 }
 
 /** 条件标签文案 */

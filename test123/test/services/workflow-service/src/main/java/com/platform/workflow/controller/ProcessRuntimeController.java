@@ -47,7 +47,7 @@ public class ProcessRuntimeController {
      * 返回：待办列表（taskId 为引擎任务 id，nodeKey 即表单快照 key）。
      */
     @GetMapping("/task/my")
-    public Result<List<TaskViewDto>> myTasks(@RequestParam String assignee) {
+    public Result<List<TaskViewDto>> myTasks(@RequestParam("assignee") String assignee) {
         return Result.ok(runtimeService.myTasks(assignee));
     }
 
@@ -60,6 +60,16 @@ public class ProcessRuntimeController {
     @PostMapping("/task/submit")
     public Result<Void> submit(@Valid @RequestBody SubmitRequest req) {
         runtimeService.submit(req);
+        return Result.ok();
+    }
+
+    /**
+     * 接口：POST /api/task/claim —— 领取角色候选组任务（显式领取，原子）
+     * 参数：taskId 引擎任务 id、username 领取人。
+     */
+    @PostMapping("/task/claim")
+    public Result<Void> claim(@RequestParam("taskId") String taskId, @RequestParam("username") String username) {
+        runtimeService.claim(taskId, username);
         return Result.ok();
     }
 

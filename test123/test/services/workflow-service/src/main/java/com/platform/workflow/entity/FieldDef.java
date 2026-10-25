@@ -52,6 +52,9 @@ public class FieldDef extends BaseEntity {
     /** 默认是否必填（节点可覆盖） */
     private Boolean required;
 
+    /** 字段库默认值（添加字段到节点时作为初始默认值复制） */
+    private String defaultValue;
+
     /** 排序 */
     private Integer sortNo;
 

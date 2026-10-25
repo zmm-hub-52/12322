@@ -14,10 +14,14 @@ import com.platform.workflow.entity.FormSchemaSnapshot;
 import com.platform.workflow.entity.ProcessDef;
 import com.platform.workflow.entity.ProcessInstance;
 import com.platform.workflow.entity.ProcessRecord;
+import com.platform.workflow.entity.SysRole;
+import com.platform.workflow.entity.SysUser;
 import com.platform.workflow.mapper.FormSchemaSnapshotMapper;
 import com.platform.workflow.mapper.ProcessDefMapper;
 import com.platform.workflow.mapper.ProcessInstanceMapper;
 import com.platform.workflow.mapper.ProcessRecordMapper;
+import com.platform.workflow.mapper.SysRoleMapper;
+import com.platform.workflow.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -60,6 +64,8 @@ public class ProcessRuntimeService {
     private final ProcessInstanceMapper instanceMapper;
     private final FormSchemaSnapshotMapper snapshotMapper;
     private final ProcessRecordMapper recordMapper;
+    private final SysUserMapper sysUserMapper;
+    private final SysRoleMapper sysRoleMapper;
     private final ObjectMapper objectMapper;
 
     // Flowable 引擎 API
@@ -89,6 +95,9 @@ public class ProcessRuntimeService {
         if (snapshot == null) {
             throw new BizException("流程快照不存在，请重新发布");
         }
+        if (req.getFormData() != null) {
+            applyStartDefaults(snapshot, req.getFormData());
+        }
 
         // 业务实例
         ProcessInstance instance = new ProcessInstance();
@@ -107,12 +116,12 @@ public class ProcessRuntimeService {
         vars.put("applicant", req.getApplicant());
         vars.put("bizNo", req.getBizNo());
         vars.put("title", req.getTitle());
-        if (req.getFormData() != null) {
-            vars.putAll(req.getFormData());
-        }
+        // 纯表格模型：表单数据统一为 { rows: [...] }
+        putRowsVars(vars, req.getFormData());
         // 只分配「发起后的第一个用户任务」处理人（固定自动；动态必须由发起人指定）
         Map<String, Object> graph = parseGraph(snapshot.getGraphJson());
         for (Map<String, Object> n : firstUserTasks(graph)) {
+            if ("role".equals(gAssigneeMode(n))) continue; // 角色节点不注入 assignee（引擎走候选组）
             vars.put("assignee_" + gKey(n), resolveAssignee(n, req.getAssignees()));
         }
 
@@ -146,9 +155,11 @@ public class ProcessRuntimeService {
         Map<String, Object> assigneeVars = new HashMap<>();
         Map<String, Object> graph = graphOf(instance);
         for (Map<String, Object> next : nextUserTasks(graph, task.getTaskDefinitionKey())) {
+            if ("role".equals(gAssigneeMode(next))) continue;
             assigneeVars.put("assignee_" + gKey(next), resolveAssignee(next, req.getNextAssignees()));
         }
         Map<String, Object> completeVars = new HashMap<>(formVars);
+        putRowsVars(completeVars, formVars);
         completeVars.putAll(assigneeVars);
         taskService.complete(req.getTaskId(), completeVars);
 
@@ -179,11 +190,13 @@ public class ProcessRuntimeService {
         // 审批节点可编辑字段的表单数据（作为流程变量并合并进实例数据）
         Map<String, Object> formVars = req.getFormData() == null ? new HashMap<>() : new HashMap<>(req.getFormData());
         Map<String, Object> completeVars = new HashMap<>(formVars);
+        putRowsVars(completeVars, formVars);
         completeVars.put("approved", req.isApproved());
         // 下一处理人（仅批准线；驳回线按策略回退到已定处理人）
         if (req.isApproved()) {
             Map<String, Object> graph = graphOf(instance);
             for (Map<String, Object> next : nextUserTasks(graph, task.getTaskDefinitionKey())) {
+                if ("role".equals(gAssigneeMode(next))) continue;
                 completeVars.put("assignee_" + gKey(next), resolveAssignee(next, req.getNextAssignees()));
             }
         }
@@ -208,12 +221,17 @@ public class ProcessRuntimeService {
 
     /** 待办列表（引擎任务 + 业务实例上下文） */
     public List<TaskViewDto> myTasks(String assignee) {
-        List<Task> tasks = taskService.createTaskQuery()
-                .taskAssignee(assignee)
-                .orderByTaskCreateTime().desc()
-                .list();
+        List<Task> tasks = new ArrayList<>();
+        tasks.addAll(taskService.createTaskQuery().taskAssignee(assignee).orderByTaskCreateTime().desc().list());
+        List<String> roleCodes = roleCodesOf(assignee);
+        if (!roleCodes.isEmpty()) {
+            tasks.addAll(taskService.createTaskQuery().taskCandidateGroupIn(roleCodes).orderByTaskCreateTime().desc().list());
+        }
+        Map<String, Task> byId = new LinkedHashMap<>();
+        for (Task t : tasks) byId.put(t.getId(), t);
+
         List<TaskViewDto> result = new ArrayList<>();
-        for (Task t : tasks) {
+        for (Task t : byId.values()) {
             String bizKey = businessKeyOf(t);
             if (bizKey == null) continue;
             ProcessInstance instance;
@@ -228,7 +246,6 @@ public class ProcessRuntimeService {
             try {
                 node = findNode(graphOf(instance), t.getTaskDefinitionKey());
             } catch (BizException ignored) {
-                // 旧快照缺 graph_json：降级为仅显示 taskDefinitionKey
             }
             TaskViewDto dto = new TaskViewDto();
             dto.setTaskId(t.getId());
@@ -240,9 +257,27 @@ public class ProcessRuntimeService {
             dto.setNodeType(node != null ? gType(node) : null);
             dto.setCreateTime(t.getCreateTime() == null ? null
                     : t.getCreateTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+            dto.setClaimable(t.getAssignee() == null);
             result.add(dto);
         }
         return result;
+    }
+
+    /** 领取角色候选组任务（原子；领取后该任务只属于领取人） */
+    public void claim(String taskId, String username) {
+        Task task = requireTask(taskId);
+        if (task.getAssignee() != null) {
+            throw new BizException("任务已被领取");
+        }
+        taskService.claim(taskId, username);
+    }
+
+    /** 用户所属角色 codes（用于角色候选组待办查询） */
+    private List<String> roleCodesOf(String username) {
+        SysUser user = sysUserMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
+        if (user == null || user.getRoleId() == null) return List.of();
+        SysRole role = sysRoleMapper.selectById(user.getRoleId());
+        return role != null && role.getRoleCode() != null ? List.of(role.getRoleCode()) : List.of();
     }
 
     /** 实例详情（业务单据） */
@@ -355,7 +390,9 @@ public class ProcessRuntimeService {
         result.put("nodeKey", nodeKey);
         result.put("nodeName", node != null ? gName(node) : nodeKey);
         result.put("nodeType", node != null ? gType(node) : null);
+        result.put("nodeMode", node != null ? gNodeMode(node) : "form");
         result.put("finished", false);
+        result.put("claimable", task.getAssignee() == null);
         result.put("fields", nodes != null ? nodes.get(nodeKey) : null);
         // 下一用户任务列表（供「下一处理人」选择；串行 1 个，并行多支）
         List<Map<String, Object>> nextNodes = new ArrayList<>();
@@ -366,6 +403,7 @@ public class ProcessRuntimeService {
             m.put("nodeType", gType(next));
             m.put("assigneeMode", gAssigneeMode(next) == null ? "dynamic" : gAssigneeMode(next));
             m.put("fixedAssignee", gFixedAssignee(next));
+            m.put("roleCode", gRoleCode(next));
             nextNodes.add(m);
         }
         if (!nextNodes.isEmpty()) {
@@ -520,6 +558,8 @@ public class ProcessRuntimeService {
     private static String gType(Map<String, Object> n) { return str(n.get("type")); }
     private static String gAssigneeMode(Map<String, Object> n) { return str(n.get("assigneeMode")); }
     private static String gFixedAssignee(Map<String, Object> n) { return str(n.get("fixedAssignee")); }
+    private static String gRoleCode(Map<String, Object> n) { return str(n.get("roleCode")); }
+    private static String gNodeMode(Map<String, Object> n) { return str(n.get("nodeMode")); }
     private static String gFrom(Map<String, Object> l) { return str(l.get("fromKey")); }
     private static String gTo(Map<String, Object> l) { return str(l.get("toKey")); }
     private static String str(Object v) { return v == null ? null : String.valueOf(v); }
@@ -557,6 +597,38 @@ public class ProcessRuntimeService {
         r.setComment(comment);
         r.setFlowableTaskId(flowableTaskId);
         recordMapper.insert(r);
+    }
+
+    /** 发起时按 start 节点列默认值补空单元格。 */
+    @SuppressWarnings("unchecked")
+    private void applyStartDefaults(FormSchemaSnapshot snapshot, Map<String, Object> formData) {
+        Map<String, Object> root = parseJsonObject(snapshot.getSnapshotJson());
+        Object nodesObj = root.get("nodes");
+        if (!(nodesObj instanceof Map<?, ?> nodesMap)) return;
+        Object colsObj = nodesMap.get("start");
+        if (!(colsObj instanceof List<?> colsList)) return;
+        Object rowsObj = formData.get("rows");
+        if (!(rowsObj instanceof List<?> rowsList)) return;
+        for (Object r : rowsList) {
+            if (!(r instanceof Map<?, ?> rowMap)) continue;
+            Map<String, Object> row = (Map<String, Object>) rowMap;
+            for (Object c : colsList) {
+                if (!(c instanceof Map<?, ?> colMap)) continue;
+                String key = str(colMap.get("key"));
+                Object dv = colMap.get("defaultValue");
+                Object v = row.get(key);
+                if ((v == null || String.valueOf(v).isBlank()) && dv != null) {
+                    row.put(key, dv);
+                }
+            }
+        }
+    }
+
+    /** 纯表格模型：把 formData 的 rows 作为流程变量写入。 */
+    @SuppressWarnings("unchecked")
+    private void putRowsVars(Map<String, Object> vars, Map<String, Object> formData) {
+        Object rowsObj = formData == null ? null : formData.get("rows");
+        vars.put("rows", rowsObj instanceof List<?> rows ? rows : List.of());
     }
 
     private Map<String, Object> parseJsonObject(String json) {

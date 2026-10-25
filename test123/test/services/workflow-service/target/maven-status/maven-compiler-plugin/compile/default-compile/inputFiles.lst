@@ -12,7 +12,7 @@ D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\co
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\controller\ProcessRuntimeController.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\ApproveRequest.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\ConditionDto.java
-D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\ExcelStartRequest.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\ExcelBatchStartRequest.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\FinishedInstanceDto.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\GraphDto.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\dto\ImportPreviewDto.java
@@ -46,11 +46,17 @@ D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\co
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\mapper\ProcessRecordMapper.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\mapper\SysRoleMapper.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\mapper\SysUserMapper.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\rule\RuleEvaluator.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\rule\RuleFactory.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\rule\RuleNode.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\rule\RuleTreeMapper.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\rule\RuleUelCompiler.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\BpmnGenerator.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\DimensionService.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\ExcelImportService.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\FieldService.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\ProcessConfigService.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\ProcessRuntimeService.java
+D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\RuleExcelService.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\service\SchemaAssembler.java
 D:\AI-Workspace\microservice-platform\services\workflow-service\src\main\java\com\platform\workflow\WorkflowServiceApplication.java

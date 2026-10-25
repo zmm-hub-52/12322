@@ -5,6 +5,11 @@ import com.platform.workflow.dto.GraphDto;
 import com.platform.workflow.entity.NodeFormField;
 import com.platform.workflow.entity.ProcessDef;
 import com.platform.workflow.service.ProcessConfigService;
+import com.platform.workflow.service.RuleExcelService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +26,8 @@ import java.util.Map;
 public class ProcessConfigController {
 
     private final ProcessConfigService configService;
+    private final RuleExcelService ruleExcelService;
+
 
     // ==================== 流程定义 ====================
 
@@ -159,6 +166,22 @@ public class ProcessConfigController {
     @DeleteMapping("/fields/{id}")
     public Result<Void> deleteNodeField(@PathVariable Long id) {
         configService.deleteNodeField(id);
+        return Result.ok();
+    }
+    // ==================== 规则导入 / 导出 ====================
+
+    @GetMapping("/nodes/{nodeId}/rules/export")
+    public ResponseEntity<byte[]> exportRules(@PathVariable Long nodeId) {
+        byte[] bytes = ruleExcelService.exportRules(nodeId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=node-rules-" + nodeId + ".xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping("/nodes/{nodeId}/rules/import")
+    public Result<Void> importRules(@PathVariable Long nodeId, @RequestParam("file") MultipartFile file) {
+        ruleExcelService.importRules(nodeId, file);
         return Result.ok();
     }
 }
